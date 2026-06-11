@@ -263,7 +263,7 @@ export default function DashboardPage() {
                 className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition ${
                   index === 0
                     ? "border border-blue-400/40 bg-blue-600/35 text-white shadow-[0_0_24px_rgba(37,99,235,0.16)]"
-                    : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                    : "text-slate-400 hover:bg-white/4 hover:text-white"
                 }`}
                 href="#"
                 key={item}
@@ -329,7 +329,7 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className="flex items-center gap-3">
-                <button className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]" type="button">
+                <button className="h-11 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]" type="button">
                   Create Alert
                 </button>
                 <button className="flex size-11 items-center justify-center rounded-full border border-cyan-400/50 bg-slate-950 text-sm font-black text-white" type="button">
@@ -371,7 +371,7 @@ export default function DashboardPage() {
                           <p className="text-xs text-slate-500">{source}</p>
                         </div>
                       </div>
-                      <span className="rounded-md bg-white/[0.04] px-2 py-1 text-xs text-slate-300">{status}</span>
+                      <span className="rounded-md bg-white/4 px-2 py-1 text-xs text-slate-300">{status}</span>
                       <span className="text-xs text-slate-500">{time}</span>
                     </div>
                   ))}
@@ -433,7 +433,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex h-40 items-end gap-2 rounded-xl bg-slate-950/35 p-4">
                   {bars.map((height, index) => (
-                    <div className="flex-1 rounded-t bg-gradient-to-t from-blue-700 to-cyan-300" key={`${height}-${index}`} style={{ height: `${height}%` }} />
+                    <div className="flex-1 rounded-t bg-linear-to-t from-blue-700 to-cyan-300" key={`${height}-${index}`} style={{ height: `${height}%` }} />
                   ))}
                 </div>
                 <div className="mt-4 grid grid-cols-3 text-center text-sm text-slate-400">
@@ -511,7 +511,7 @@ export default function DashboardPage() {
                         <span className="font-bold text-white">{count}</span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-800">
-                        <div className={`h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-600 ${width}`} />
+                        <div className={`h-full rounded-full bg-linear-to-r from-cyan-400 to-blue-600 ${width}`} />
                       </div>
                     </div>
                   ))}

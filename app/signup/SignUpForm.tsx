@@ -308,7 +308,7 @@ export default function SignUpForm() {
       </label>
 
       <button
-        className="flex h-[52px] w-full items-center justify-center gap-4 rounded-lg bg-gradient-to-r from-cyan-400 via-blue-600 to-violet-700 text-base font-extrabold text-white shadow-[0_0_30px_rgba(37,99,235,0.34)] transition hover:scale-[1.01]"
+        className="flex h-13 w-full items-center justify-center gap-4 rounded-lg bg-linear-to-r from-cyan-400 via-blue-600 to-violet-700 text-base font-extrabold text-white shadow-[0_0_30px_rgba(37,99,235,0.34)] transition hover:scale-[1.01]"
         type="submit"
       >
         Create Account
@@ -323,14 +323,14 @@ export default function SignUpForm() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <button
-          className="flex h-12 items-center justify-center gap-3 rounded-lg border border-white/12 bg-slate-950/35 text-sm font-bold text-white transition hover:border-cyan-300/35 hover:bg-white/[0.06]"
+          className="flex h-12 items-center justify-center gap-3 rounded-lg border border-white/12 bg-slate-950/35 text-sm font-bold text-white transition hover:border-cyan-300/35 hover:bg-white/6"
           type="button"
         >
           <ProviderIcon provider="google" />
           Google
         </button>
         <button
-          className="flex h-12 items-center justify-center gap-3 rounded-lg border border-white/12 bg-slate-950/35 text-sm font-bold text-white transition hover:border-cyan-300/35 hover:bg-white/[0.06]"
+          className="flex h-12 items-center justify-center gap-3 rounded-lg border border-white/12 bg-slate-950/35 text-sm font-bold text-white transition hover:border-cyan-300/35 hover:bg-white/6"
           type="button"
         >
           <ProviderIcon provider="github" />

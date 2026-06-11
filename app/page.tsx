@@ -184,7 +184,7 @@ function DashboardMockup() {
   return (
     <div className="rounded-[18px] border border-slate-600/60 bg-slate-950/80 p-2 shadow-[0_0_55px_rgba(37,99,235,0.22)] backdrop-blur-xl">
       <div className="grid overflow-hidden rounded-2xl border border-white/10 bg-[#07101f] md:grid-cols-[126px_1fr]">
-        <aside className="hidden border-r border-white/10 bg-white/[0.035] p-4 md:block">
+        <aside className="hidden border-r border-white/10 bg-white/3.5 p-4 md:block">
           <div className="mb-5 flex items-center gap-2">
             <LogoMark compact />
             <span className="text-sm font-bold text-white">EventPulse</span>
@@ -226,7 +226,7 @@ function DashboardMockup() {
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             {overviewStats.map((stat, index) => (
               <div
-                className="rounded-lg border border-white/10 bg-white/[0.045] p-3"
+                className="rounded-lg border border-white/10 bg-white/4.5 p-3"
                 key={stat.label}
               >
                 <div className="flex items-start justify-between">
@@ -259,7 +259,7 @@ function DashboardMockup() {
           </div>
 
           <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.15fr]">
-            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-bold text-white">Event Stream</p>
                 <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300">
@@ -291,7 +291,7 @@ function DashboardMockup() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-bold text-white">API Traffic</p>
                 <span className="text-[10px] text-cyan-300">View details</span>
@@ -320,7 +320,7 @@ function DashboardMockup() {
           </div>
 
           <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr]">
-            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <p className="mb-2 text-xs font-bold text-white">Event Categories</p>
               <div className="flex items-center gap-4">
                 <div
@@ -345,7 +345,7 @@ function DashboardMockup() {
                 </div>
               </div>
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <p className="mb-2 text-xs font-bold text-white">System Health</p>
               <div className="space-y-2">
                 {health.map((item) => (
@@ -380,10 +380,10 @@ export default function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#020814] text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(14,165,233,0.24),transparent_26%),radial-gradient(circle_at_80%_20%,rgba(88,28,135,0.24),transparent_30%)]" />
-      <div className="pointer-events-none absolute inset-x-0 top-16 h-[620px] bg-[linear-gradient(rgba(59,130,246,0.09)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.09)_1px,transparent_1px)] bg-[size:82px_82px]" />
+      <div className="pointer-events-none absolute inset-x-0 top-16 h-155 bg-[linear-gradient(rgba(59,130,246,0.09)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.09)_1px,transparent_1px)] bg-size-[82px_82px]" />
 
       <header className="relative z-20 border-b border-white/10 bg-[#030b19]/80 backdrop-blur-xl">
-        <nav className="mx-auto flex h-[62px] max-w-[1200px] items-center justify-between px-4 sm:px-6">
+        <nav className="mx-auto flex h-15.5 max-w-300 items-center justify-between px-4 sm:px-6">
           <a className="flex items-center gap-2" href="#" aria-label="EventPulse home">
             <LogoMark />
             <span className="text-2xl font-extrabold tracking-tight">EventPulse</span>
@@ -403,13 +403,13 @@ export default function Home() {
 
           <div className="flex items-center gap-3">
             <a
-              className="hidden rounded-lg border border-violet-400/35 bg-white/[0.02] px-6 py-2.5 text-sm font-bold text-white transition hover:border-cyan-300/50 sm:inline-flex"
+              className="hidden rounded-lg border border-violet-400/35 bg-white/2 px-6 py-2.5 text-sm font-bold text-white transition hover:border-cyan-300/50 sm:inline-flex"
               href="/signin"
             >
               Sign In
             </a>
             <a
-              className="rounded-lg bg-gradient-to-r from-blue-600 to-cyan-400 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_0_24px_rgba(14,165,233,0.35)] transition hover:scale-[1.02]"
+              className="rounded-lg bg-linear-to-r from-blue-600 to-cyan-400 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_0_24px_rgba(14,165,233,0.35)] transition hover:scale-[1.02]"
               href="/signup"
             >
               Get Started
@@ -418,7 +418,7 @@ export default function Home() {
         </nav>
       </header>
 
-      <section className="relative z-10 mx-auto grid max-w-[1200px] items-center gap-8 px-4 pb-5 pt-12 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:pt-16">
+      <section className="relative z-10 mx-auto grid max-w-300 items-center gap-8 px-4 pb-5 pt-12 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:pt-16">
         <div className="relative">
           <div className="absolute -right-12 top-32 hidden h-56 w-56 rounded-full border border-blue-500/20 bg-[radial-gradient(circle,rgba(37,99,235,0.35),transparent_58%)] opacity-80 blur-sm lg:block" />
           <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-500/10 px-4 py-2 text-sm text-blue-200 shadow-[0_0_24px_rgba(37,99,235,0.16)]">
@@ -426,13 +426,13 @@ export default function Home() {
             Real-Time Event Monitoring & Alerting Platform
           </div>
 
-          <h1 className="max-w-[540px] text-[42px] font-black leading-[1.08] tracking-tight text-white sm:text-[58px] lg:text-[56px]">
+          <h1 className="max-w-135 text-[42px] font-black leading-[1.08] tracking-tight text-white sm:text-[58px] lg:text-[56px]">
             Monitor Every Event. React in{" "}
-            <span className="bg-gradient-to-r from-cyan-300 via-blue-500 to-violet-500 bg-clip-text text-transparent">
+            <span className="bg-linear-to-r from-cyan-300 via-blue-500 to-violet-500 bg-clip-text text-transparent">
               Real Time.
             </span>
           </h1>
-          <p className="mt-4 max-w-[510px] text-base leading-7 text-slate-300">
+          <p className="mt-4 max-w-127.5 text-base leading-7 text-slate-300">
             EventPulse helps developers and teams ingest, track, analyze, and
             alert on critical product and system events through powerful APIs -
             in real time.
@@ -440,14 +440,14 @@ export default function Home() {
 
           <div className="mt-7 flex flex-col gap-4 sm:flex-row">
             <a
-              className="inline-flex h-13 items-center justify-center gap-4 rounded-lg bg-gradient-to-r from-cyan-400 via-blue-500 to-violet-600 px-9 text-base font-extrabold text-white shadow-[0_0_28px_rgba(37,99,235,0.34)]"
+              className="inline-flex h-13 items-center justify-center gap-4 rounded-lg bg-linear-to-r from-cyan-400 via-blue-500 to-violet-600 px-9 text-base font-extrabold text-white shadow-[0_0_28px_rgba(37,99,235,0.34)]"
               href="/signup"
             >
               Start Free
               <span aria-hidden="true">-&gt;</span>
             </a>
             <a
-              className="inline-flex h-13 items-center justify-center gap-4 rounded-lg border border-violet-400/45 bg-white/[0.03] px-9 text-base font-extrabold text-white"
+              className="inline-flex h-13 items-center justify-center gap-4 rounded-lg border border-violet-400/45 bg-white/3 px-9 text-base font-extrabold text-white"
               href="#how-it-works"
             >
               View Demo
@@ -468,8 +468,8 @@ export default function Home() {
         <DashboardMockup />
       </section>
 
-      <section className="relative z-10 mx-auto max-w-[1200px] px-4 py-4 sm:px-6">
-        <div className="grid overflow-hidden rounded-xl border border-blue-300/25 bg-white/[0.045] shadow-[0_0_40px_rgba(37,99,235,0.16)] backdrop-blur md:grid-cols-4">
+      <section className="relative z-10 mx-auto max-w-300 px-4 py-4 sm:px-6">
+        <div className="grid overflow-hidden rounded-xl border border-blue-300/25 bg-white/4.5 shadow-[0_0_40px_rgba(37,99,235,0.16)] backdrop-blur md:grid-cols-4">
           {platformStats.map((stat) => (
             <div
               className="flex items-center gap-5 px-9 py-5 md:border-r md:border-white/10 last:md:border-r-0"
@@ -490,7 +490,7 @@ export default function Home() {
       </section>
 
       <section
-        className="relative z-10 mx-auto max-w-[1040px] px-4 py-4 sm:px-6"
+        className="relative z-10 mx-auto max-w-260 px-4 py-4 sm:px-6"
         id="features"
       >
         <SectionLabel>Features</SectionLabel>
@@ -501,11 +501,11 @@ export default function Home() {
         <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {featureCards.map((feature) => (
             <article
-              className="rounded-lg border border-white/12 bg-white/[0.045] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur"
+              className="rounded-lg border border-white/12 bg-white/4.5 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur"
               key={feature.title}
             >
               <div className="flex gap-4">
-                <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/20 to-violet-600/25 text-cyan-400 shadow-[0_0_24px_rgba(124,58,237,0.25)]">
+                <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-500/20 to-violet-600/25 text-cyan-400 shadow-[0_0_24px_rgba(124,58,237,0.25)]">
                   <Icon name={feature.icon} className="size-9" />
                 </div>
                 <div>
@@ -523,7 +523,7 @@ export default function Home() {
       </section>
 
       <section
-        className="relative z-10 mx-auto max-w-[1040px] px-4 py-3 sm:px-6"
+        className="relative z-10 mx-auto max-w-260 px-4 py-3 sm:px-6"
         id="how-it-works"
       >
         <SectionLabel>How It Works</SectionLabel>
@@ -542,7 +542,7 @@ export default function Home() {
               <h3 className="text-base font-extrabold text-white">
                 {step.title}
               </h3>
-              <p className="mx-auto mt-2 max-w-[190px] text-sm leading-5 text-slate-300">
+              <p className="mx-auto mt-2 max-w-47.5 text-sm leading-5 text-slate-300">
                 {step.description}
               </p>
             </div>
@@ -551,7 +551,7 @@ export default function Home() {
       </section>
 
       <section
-        className="relative z-10 mx-auto grid max-w-[1200px] gap-5 px-4 py-8 sm:px-6 lg:grid-cols-[0.95fr_1.1fr_0.65fr]"
+        className="relative z-10 mx-auto grid max-w-300 gap-5 px-4 py-8 sm:px-6 lg:grid-cols-[0.95fr_1.1fr_0.65fr]"
         id="docs"
       >
         <div className="self-center">
@@ -568,7 +568,7 @@ export default function Home() {
           <div className="mt-6 flex flex-wrap gap-3 text-xs font-bold text-slate-200">
             {["RESTful APIs", "JSON Payloads", "HTTPS Secure"].map((badge, index) => (
               <span
-                className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.045] px-3 py-2"
+                className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/4.5 px-3 py-2"
                 key={badge}
               >
                 <Icon
@@ -582,7 +582,7 @@ export default function Home() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-white/15 bg-[#07101f]/95 shadow-[0_0_30px_rgba(15,23,42,0.45)]">
-          <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.04] px-4 py-2.5">
+          <div className="flex items-center justify-between border-b border-white/10 bg-white/4 px-4 py-2.5">
             <p className="font-mono text-sm font-bold text-cyan-300">
               POST <span className="text-white">/v1/events</span>
             </p>
@@ -606,7 +606,7 @@ export default function Home() {
           </pre>
         </div>
 
-        <aside className="rounded-lg border border-white/15 bg-white/[0.045] p-5">
+        <aside className="rounded-lg border border-white/15 bg-white/4.5 p-5">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-blue-500/15 text-cyan-400">
               <Icon name="shield" className="size-6" />
@@ -632,8 +632,8 @@ export default function Home() {
         </aside>
       </section>
 
-      <section className="relative z-10 mx-auto max-w-[1200px] px-4 pb-5 sm:px-6">
-        <div className="rounded-xl border border-blue-400/35 bg-gradient-to-r from-blue-700/55 via-indigo-700/45 to-purple-800/55 px-7 py-6 shadow-[0_0_38px_rgba(37,99,235,0.22)]">
+      <section className="relative z-10 mx-auto max-w-300 px-4 pb-5 sm:px-6">
+        <div className="rounded-xl border border-blue-400/35 bg-linear-to-r from-blue-700/55 via-indigo-700/45 to-purple-800/55 px-7 py-6 shadow-[0_0_38px_rgba(37,99,235,0.22)]">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-5">
               <div className="hidden size-16 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 sm:flex">
@@ -651,14 +651,14 @@ export default function Home() {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <a
-                className="inline-flex h-12 min-w-36 items-center justify-center gap-4 rounded-md bg-gradient-to-r from-cyan-400 to-blue-600 px-6 text-sm font-extrabold text-white"
+                className="inline-flex h-12 min-w-36 items-center justify-center gap-4 rounded-md bg-linear-to-r from-cyan-400 to-blue-600 px-6 text-sm font-extrabold text-white"
                 href="/signup"
               >
                 Start Free
                 <span aria-hidden="true">-&gt;</span>
               </a>
               <a
-                className="inline-flex h-12 min-w-36 items-center justify-center rounded-md border border-white/20 bg-white/[0.04] px-6 text-sm font-extrabold text-white"
+                className="inline-flex h-12 min-w-36 items-center justify-center rounded-md border border-white/20 bg-white/4 px-6 text-sm font-extrabold text-white"
                 href="#pricing"
               >
                 View Pricing
@@ -672,7 +672,7 @@ export default function Home() {
         className="relative z-10 border-t border-white/10 bg-[#03101f]/70"
         id="contact"
       >
-        <div className="mx-auto grid max-w-[1200px] gap-8 px-4 py-6 sm:px-6 md:grid-cols-[1.35fr_0.7fr_0.8fr_0.75fr_1.35fr]">
+        <div className="mx-auto grid max-w-300 gap-8 px-4 py-6 sm:px-6 md:grid-cols-[1.35fr_0.7fr_0.8fr_0.75fr_1.35fr]">
           <div>
             <div className="flex items-center gap-2">
               <LogoMark />
@@ -712,7 +712,7 @@ export default function Home() {
               Get product updates and engineering insights straight to your
               inbox.
             </p>
-            <form className="mt-4 flex overflow-hidden rounded-md border border-white/10 bg-white/[0.045]">
+            <form className="mt-4 flex overflow-hidden rounded-md border border-white/10 bg-white/4.5">
               <input
                 aria-label="Email address"
                 className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
@@ -731,7 +731,7 @@ export default function Home() {
         </div>
 
         <div className="border-t border-white/10">
-          <div className="mx-auto flex max-w-[1200px] flex-col gap-3 px-4 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="mx-auto flex max-w-300 flex-col gap-3 px-4 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <p>&copy; 2025 EventPulse. All rights reserved.</p>
             <div className="flex gap-10">
               <a href="#">Privacy Policy</a>

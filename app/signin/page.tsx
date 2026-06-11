@@ -93,7 +93,7 @@ function DashboardPreview() {
   return (
     <div className="rounded-xl border border-slate-600/45 bg-slate-950/70 p-2 shadow-[0_0_35px_rgba(14,165,233,0.14)]">
       <div className="grid overflow-hidden rounded-lg border border-white/10 bg-[#06101f] md:grid-cols-[130px_1fr]">
-        <aside className="hidden border-r border-white/10 bg-white/[0.035] p-4 md:block">
+        <aside className="hidden border-r border-white/10 bg-white/3.5 p-4 md:block">
           <div className="mb-5 flex items-center gap-2">
             <LogoMark />
             <span className="text-xs font-black text-white">EventPulse</span>
@@ -125,7 +125,7 @@ function DashboardPreview() {
           <div className="grid gap-3 sm:grid-cols-3">
             {previewStats.map(([label, value, trend], index) => (
               <div
-                className="rounded-lg border border-white/10 bg-white/[0.045] p-3"
+                className="rounded-lg border border-white/10 bg-white/4.5 p-3"
                 key={label}
               >
                 <p className="text-[10px] text-slate-400">{label}</p>
@@ -141,7 +141,7 @@ function DashboardPreview() {
             ))}
           </div>
 
-          <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.035] p-4">
+          <div className="mt-3 rounded-lg border border-white/10 bg-white/3.5 p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-black text-white">Event Stream</p>
               <div className="flex gap-4 text-[10px] text-slate-400">
@@ -172,7 +172,7 @@ function DashboardPreview() {
           </div>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-[0.9fr_1fr]">
-            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <p className="mb-3 text-xs font-black text-white">
                 Event Categories
               </p>
@@ -195,7 +195,7 @@ function DashboardPreview() {
                 </div>
               </div>
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <p className="mb-3 text-xs font-black text-white">System Health</p>
               <div className="space-y-2 text-[11px]">
                 {["Ingestion", "Processing", "Alerts", "Database"].map((item) => (
@@ -219,10 +219,10 @@ export default function SignInPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#020814] px-4 py-8 text-white sm:px-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(14,165,233,0.22),transparent_28%),radial-gradient(circle_at_87%_42%,rgba(79,70,229,0.22),transparent_32%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.06)_1px,transparent_1px)] bg-[size:84px_84px]" />
-      <div className="pointer-events-none absolute left-[22%] top-20 h-[560px] w-[560px] rounded-full border border-blue-500/10 bg-[radial-gradient(circle,rgba(37,99,235,0.18),transparent_60%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.06)_1px,transparent_1px)] bg-size-[84px_84px]" />
+      <div className="pointer-events-none absolute left-[22%] top-20 h-140 w-140 rounded-full border border-blue-500/10 bg-[radial-gradient(circle,rgba(37,99,235,0.18),transparent_60%)]" />
 
-      <header className="relative z-10 mx-auto flex max-w-[1220px] items-center justify-between">
+      <header className="relative z-10 mx-auto flex max-w-305 items-center justify-between">
         <Link className="flex items-center gap-3" href="/">
           <LogoMark />
           <span className="text-2xl font-black tracking-tight sm:text-3xl">
@@ -236,15 +236,15 @@ export default function SignInPage() {
         </div>
       </header>
 
-      <section className="relative z-10 mx-auto mt-10 grid max-w-[1220px] items-center gap-10 lg:grid-cols-[0.96fr_1.04fr]">
+      <section className="relative z-10 mx-auto mt-10 grid max-w-305 items-center gap-10 lg:grid-cols-[0.96fr_1.04fr]">
         <div className="hidden lg:block">
-          <h1 className="max-w-[500px] text-5xl font-black leading-[1.12] tracking-tight">
+          <h1 className="max-w-125 text-5xl font-black leading-[1.12] tracking-tight">
             Monitor Every Event. React in{" "}
-            <span className="bg-gradient-to-r from-cyan-300 via-blue-500 to-violet-500 bg-clip-text text-transparent">
+            <span className="bg-linear-to-r from-cyan-300 via-blue-500 to-violet-500 bg-clip-text text-transparent">
               Real Time.
             </span>
           </h1>
-          <p className="mt-4 max-w-[430px] text-base leading-7 text-slate-300">
+          <p className="mt-4 max-w-107.5 text-base leading-7 text-slate-300">
             EventPulse helps developers and teams ingest, track, analyze, and
             alert on critical product and system events through powerful APIs.
           </p>
@@ -253,7 +253,7 @@ export default function SignInPage() {
             <DashboardPreview />
           </div>
 
-          <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-4 sm:grid-cols-3">
+          <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-white/3.5 p-4 sm:grid-cols-3">
             {benefits.map(([title, description, icon]) => (
               <div className="flex gap-3" key={title}>
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-cyan-400">
@@ -281,7 +281,7 @@ export default function SignInPage() {
           </div>
         </div>
 
-        <section className="mx-auto w-full max-w-[520px] rounded-3xl border border-slate-600/50 bg-slate-950/55 px-6 py-9 shadow-[0_0_60px_rgba(37,99,235,0.18)] backdrop-blur-xl sm:px-12">
+        <section className="mx-auto w-full max-w-130 rounded-3xl border border-slate-600/50 bg-slate-950/55 px-6 py-9 shadow-[0_0_60px_rgba(37,99,235,0.18)] backdrop-blur-xl sm:px-12">
           <div className="mx-auto flex size-20 items-center justify-center rounded-full border border-blue-500/40 bg-blue-600/10 text-cyan-400 shadow-[0_0_28px_rgba(37,99,235,0.34)]">
             <Icon name="lock" className="size-10" />
           </div>
@@ -297,7 +297,7 @@ export default function SignInPage() {
         </section>
       </section>
 
-      <section className="relative z-10 mx-auto mt-8 max-w-[1220px] rounded-2xl border border-white/10 bg-white/[0.035] p-5 backdrop-blur">
+      <section className="relative z-10 mx-auto mt-8 max-w-305 rounded-2xl border border-white/10 bg-white/3.5 p-5 backdrop-blur">
         <div className="grid gap-5 md:grid-cols-[1.2fr_repeat(4,1fr)]">
           <div className="flex items-center gap-4">
             <div className="flex size-12 items-center justify-center rounded-full bg-blue-500/15 text-blue-300">
