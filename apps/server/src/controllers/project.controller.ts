@@ -5,6 +5,11 @@ import {
   getProjectsByUserId,
 } from "../data/memoryStore";
 import type { AuthRequest } from "../middleware/auth.middleware";
+import {
+  isNonEmptyString,
+  isValidDomain,
+  normalizeString,
+} from "../utils/validation";
 
 export async function createProjectController(
   req: AuthRequest,
@@ -20,17 +25,34 @@ export async function createProjectController(
 
     const { name, domain, description } = req.body;
 
-    if (!name || !domain) {
+    if (!isNonEmptyString(name)) {
       return res.status(400).json({
         success: false,
-        message: "Project name and domain are required",
+        message: "Project name is required",
       });
     }
 
+    if (!isValidDomain(domain)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid domain is required",
+      });
+    }
+
+    if (description !== undefined && typeof description !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Description must be a string",
+      });
+    }
+
+    const normalizedDescription =
+      description === undefined ? undefined : normalizeString(description);
+
     const project = createProject({
-      name,
-      domain,
-      description,
+      name: normalizeString(name),
+      domain: normalizeString(domain),
+      description: normalizedDescription,
       userId: req.user.userId,
     });
 

@@ -7,19 +7,43 @@ import {
 import type { AuthRequest } from "../middleware/auth.middleware";
 import { signToken } from "../utils/jwt";
 import { comparePassword, hashPassword } from "../utils/password";
+import {
+  isNonEmptyString,
+  isStrongPassword,
+  isValidEmail,
+  normalizeEmail,
+  normalizeString,
+} from "../utils/validation";
 
 export async function signup(req: Request, res: Response) {
   try {
     const { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
+    if (!isNonEmptyString(name)) {
       return res.status(400).json({
         success: false,
-        message: "Name, email, and password are required",
+        message: "Name is required",
       });
     }
 
-    const existingUser = findUserByEmail(email);
+    if (!isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid email is required",
+      });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters and include at least one letter and one number",
+      });
+    }
+
+    const normalizedName = normalizeString(name);
+    const normalizedEmail = normalizeEmail(email);
+    const existingUser = findUserByEmail(normalizedEmail);
 
     if (existingUser) {
       return res.status(409).json({
@@ -31,8 +55,8 @@ export async function signup(req: Request, res: Response) {
     const passwordHash = await hashPassword(password);
 
     const user = createUser({
-      name,
-      email,
+      name: normalizedName,
+      email: normalizedEmail,
       passwordHash,
     });
 
@@ -67,14 +91,22 @@ export async function signin(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!isValidEmail(email)) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: "Valid email is required",
       });
     }
 
-    const user = findUserByEmail(email);
+    if (!isNonEmptyString(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required",
+      });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const user = findUserByEmail(normalizedEmail);
 
     if (!user) {
       return res.status(401).json({
