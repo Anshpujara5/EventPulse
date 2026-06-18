@@ -14,10 +14,13 @@
 
 # next.js
 /.next/
+**/.next/
 /out/
 
 # production
 /build
+dist/
+**/dist/
 
 # misc
 .DS_Store
@@ -34,6 +37,10 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# turbo
+.turbo
+**/.turbo
 
 # typescript
 *.tsbuildinfo
