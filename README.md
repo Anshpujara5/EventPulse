@@ -1,30 +1,133 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EventPulse
 
-## Getting Started
+EventPulse is a multi-tenant SaaS analytics platform for tracking user and product events, then turning that activity into analytics dashboards.
 
-First, run the development server:
+## Architecture
+
+EventPulse is a Turborepo-style monorepo using Bun as the package manager and Turbo for workspace tasks.
+
+```text
+EventPulse/
+├─ apps/
+│  ├─ web/       # Next.js + TypeScript frontend
+│  └─ server/    # Express + TypeScript backend
+├─ package.json
+├─ turbo.json
+└─ bun.lock
+```
+
+## Current Features
+
+- Polished landing page for EventPulse.
+- Signup and signin UI connected to backend auth APIs.
+- Backend signup/signin APIs with JWT auth.
+- Protected dashboard using `GET /api/auth/me`.
+- Project APIs protected by bearer token auth.
+- Temporary in-memory local development store.
+- Backend request logging for API hits during development.
+- Prisma 7 setup ready for future PostgreSQL persistence.
+
+## Prerequisites
+
+- Bun installed
+- Node.js for tooling compatibility
+- Git
+
+## Setup
+
+Clone the repository and install dependencies:
+
+```bash
+git clone <repo-url>
+cd EventPulse
+bun install
+```
+
+Create environment files from the examples:
+
+```bash
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env.local
+```
+
+Start both apps:
 
 ```bash
 bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the web app by modifying `apps/web/app/page.tsx`. The page auto-updates as you edit the file.
+Backend environment file:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```text
+apps/server/.env
+```
 
-## Learn More
+Frontend environment file:
 
-To learn more about Next.js, take a look at the following resources:
+```text
+apps/web/.env.local
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If the frontend starts on port `3001` because `3000` is busy, update `FRONTEND_URL` in `apps/server/.env` to `http://localhost:3001`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Local URLs
 
-## Deploy on Vercel
+- Frontend: `http://localhost:3000` or `http://localhost:3001`
+- Backend: `http://localhost:5001`
+- Health check: `http://localhost:5001/health`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Useful Commands
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+bun run dev
+bun run build
+bun run typecheck
+bun run lint
+```
+
+## API Examples
+
+```text
+GET  /health
+POST /api/auth/signup
+POST /api/auth/signin
+GET  /api/auth/me
+POST /api/projects
+GET  /api/projects
+GET  /api/projects/:id
+```
+
+Protected endpoints require:
+
+```text
+Authorization: Bearer <token>
+```
+
+## Demo Flow
+
+1. Open the frontend at `http://localhost:3000`.
+2. Create an account from the signup page.
+3. The frontend stores `eventpulse_token` and `eventpulse_user`.
+4. The dashboard verifies the token with `GET /api/auth/me`.
+5. Sign in later with the same credentials while the backend process is still running.
+6. Test project APIs with the saved JWT as a bearer token.
+
+## Current Limitations
+
+- `memoryStore` is temporary and only for local development.
+- User and project data reset when the backend server restarts.
+- PostgreSQL persistence through Prisma is planned but not wired into controllers yet.
+- Event ingestion and analytics processing are planned.
+- Queue, worker, and realtime dashboard updates are planned.
+
+## Roadmap
+
+- Add request validation.
+- Connect Prisma/PostgreSQL persistence.
+- Generate project API keys.
+- Add an event ingestion endpoint.
+- Add queue and worker processing.
+- Build realtime analytics dashboard updates.
+- Add rate limiting and stronger tenant isolation checks.
