@@ -1,4 +1,4 @@
-import { AuthPageShell } from "@/components/AuthPageShell";
+import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import SignInForm from "./SignInForm";
 
 const previewStats = [
