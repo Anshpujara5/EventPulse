@@ -1,8 +1,23 @@
 "use client";
 
+import { apiRequest } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+
+type AuthResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      createdAt: string;
+    };
+    token: string;
+  };
+};
 
 function FieldIcon({ type }: { type: "email" | "password" }) {
   return (
@@ -104,11 +119,38 @@ function ProviderIcon({ provider }: { provider: "google" | "github" }) {
 
 export default function SignInForm() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.push("/dashboard");
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const response = await apiRequest<AuthResponse>("/api/auth/signin", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+
+      localStorage.setItem("eventpulse_token", response.data.token);
+      localStorage.setItem(
+        "eventpulse_user",
+        JSON.stringify(response.data.user),
+      );
+      router.push("/dashboard");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to sign in",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -124,8 +166,10 @@ export default function SignInForm() {
             className="signin-input h-full min-w-0 flex-1 rounded-md border-0 bg-slate-950/70 px-1 text-base text-white caret-white outline-none placeholder:text-slate-500 focus:bg-slate-950/70"
             id="email"
             name="email"
+            onChange={(event) => setEmail(event.target.value)}
             placeholder="you@company.com"
             type="email"
+            value={email}
           />
         </div>
       </div>
@@ -144,8 +188,10 @@ export default function SignInForm() {
             className="signin-input h-full min-w-0 flex-1 rounded-md border-0 bg-slate-950/70 px-1 text-base text-white caret-white outline-none placeholder:text-slate-500 focus:bg-slate-950/70"
             id="password"
             name="password"
+            onChange={(event) => setPassword(event.target.value)}
             placeholder="Enter your password"
             type={showPassword ? "text" : "password"}
+            value={password}
           />
           <button
             aria-label={showPassword ? "Hide password" : "Show password"}
@@ -172,11 +218,18 @@ export default function SignInForm() {
         </a>
       </div>
 
+      {error ? (
+        <p className="rounded-lg border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-200">
+          {error}
+        </p>
+      ) : null}
+
       <button
         className="flex h-14 w-full items-center justify-center gap-4 rounded-xl bg-linear-to-r from-cyan-400 via-blue-600 to-violet-700 text-base font-extrabold text-white shadow-[0_0_30px_rgba(37,99,235,0.34)] transition hover:scale-[1.01]"
+        disabled={isLoading}
         type="submit"
       >
-        Sign In
+        {isLoading ? "Signing in..." : "Sign In"}
         <span aria-hidden="true">-&gt;</span>
       </button>
 

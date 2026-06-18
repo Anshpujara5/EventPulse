@@ -1,8 +1,23 @@
 "use client";
 
+import { apiRequest } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent } from "react";
+
+type AuthResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      createdAt: string;
+    };
+    token: string;
+  };
+};
 
 function FieldIcon({ type }: { type: "user" | "email" | "password" }) {
   const paths = {
@@ -190,25 +205,74 @@ function getPasswordStrength(password: string) {
 
 export default function SignUpForm() {
   const router = useRouter();
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const passwordStrength = getPasswordStrength(password);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const password = String(formData.get("password") ?? "");
-    const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+    if (!name.trim()) {
+      setError("Full name is required.");
+      return;
+    }
+
+    if (!email.trim()) {
+      setError("Work email is required.");
+      return;
+    }
+
+    if (!password) {
+      setError("Password is required.");
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError("Confirm password is required.");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
 
+    if (!termsAccepted) {
+      setError("You must agree to the Terms and Privacy Policy.");
+      return;
+    }
+
     setError("");
-    router.push("/dashboard");
+    setIsLoading(true);
+
+    try {
+      const response = await apiRequest<AuthResponse>("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      localStorage.setItem("eventpulse_token", response.data.token);
+      localStorage.setItem(
+        "eventpulse_user",
+        JSON.stringify(response.data.user),
+      );
+      router.push("/dashboard");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to create account",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -218,16 +282,20 @@ export default function SignUpForm() {
         icon="user"
         id="fullName"
         label="Full name"
+        onChange={(event) => setName(event.target.value)}
         placeholder="Jane Doe"
         type="text"
+        value={name}
       />
       <AuthField
         autoComplete="email"
         icon="email"
         id="email"
         label="Work email"
+        onChange={(event) => setEmail(event.target.value)}
         placeholder="you@company.com"
         type="email"
+        value={email}
       />
       <div>
         <AuthField
@@ -275,12 +343,14 @@ export default function SignUpForm() {
         icon="password"
         id="confirmPassword"
         label="Confirm password"
+        onChange={(event) => setConfirmPassword(event.target.value)}
         onToggleVisibility={() =>
           setShowConfirmPassword((current) => !current)
         }
         placeholder="Confirm your password"
         showValue={showConfirmPassword}
         type="password"
+        value={confirmPassword}
       />
 
       {error ? (
@@ -291,7 +361,9 @@ export default function SignUpForm() {
 
       <label className="flex items-start gap-3 text-sm text-slate-300">
         <input
+          checked={termsAccepted}
           className="mt-0.5 size-4 rounded border-slate-600 bg-slate-950 accent-blue-500"
+          onChange={(event) => setTermsAccepted(event.target.checked)}
           required
           type="checkbox"
         />
@@ -309,9 +381,10 @@ export default function SignUpForm() {
 
       <button
         className="flex h-13 w-full items-center justify-center gap-4 rounded-lg bg-linear-to-r from-cyan-400 via-blue-600 to-violet-700 text-base font-extrabold text-white shadow-[0_0_30px_rgba(37,99,235,0.34)] transition hover:scale-[1.01]"
+        disabled={isLoading}
         type="submit"
       >
-        Create Account
+        {isLoading ? "Creating account..." : "Create Account"}
         <span aria-hidden="true">-&gt;</span>
       </button>
 
