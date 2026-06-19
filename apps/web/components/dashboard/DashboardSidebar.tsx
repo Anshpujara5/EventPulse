@@ -1,9 +1,14 @@
+"use client";
+
 import { EventPulseLogo } from "@/components/common/EventPulseLogo";
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import { usePathname } from "next/navigation";
 import { navItems } from "./dashboard-data";
 
 export function DashboardSidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="border-b border-slate-800/80 bg-[#061121]/95 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
       <div className="flex h-16 items-center gap-2 px-5">
@@ -14,23 +19,30 @@ export function DashboardSidebar() {
         <span className="text-2xl font-black tracking-tight">EventPulse</span>
       </div>
       <nav className="grid gap-1 px-4 py-3 sm:grid-cols-4 lg:block lg:space-y-2">
-        {navItems.map(([item, icon], index) => (
-          <a
-            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition ${
-              index === 0
-                ? "border border-blue-400/40 bg-blue-600/35 text-white shadow-[0_0_24px_rgba(37,99,235,0.16)]"
-                : "text-slate-400 hover:bg-white/4 hover:text-white"
-            }`}
-            href="#"
-            key={item}
-          >
-            <Icon name={icon} className="size-5" />
-            <span>{item}</span>
-            {item === "Alerts" ? (
-              <span className="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-xs text-white">3</span>
-            ) : null}
-          </a>
-        ))}
+        {navItems.map(([item, icon, href]) => {
+          const isActive =
+            href === "/dashboard"
+              ? pathname === href
+              : pathname === href || pathname.startsWith(`${href}/`);
+
+          return (
+            <a
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition ${
+                isActive
+                  ? "border border-blue-400/40 bg-blue-600/35 text-white shadow-[0_0_24px_rgba(37,99,235,0.16)]"
+                  : "text-slate-400 hover:bg-white/4 hover:text-white"
+              }`}
+              href={href}
+              key={item}
+            >
+              <Icon name={icon} className="size-5" />
+              <span>{item}</span>
+              {item === "Alerts" ? (
+                <span className="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-xs text-white">3</span>
+              ) : null}
+            </a>
+          );
+        })}
       </nav>
       <div className="hidden px-4 lg:absolute lg:bottom-4 lg:left-0 lg:right-0 lg:block">
         <GlowCard className="mb-4 p-4">
