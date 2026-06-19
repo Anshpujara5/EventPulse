@@ -1,7 +1,7 @@
 "use client";
 
-import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { DashboardHeader } from "@/components/dashboard/layout/DashboardHeader";
+import { DashboardSidebar } from "@/components/dashboard/layout/DashboardSidebar";
 import { apiRequest } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";

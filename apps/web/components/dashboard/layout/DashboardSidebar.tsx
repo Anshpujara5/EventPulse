@@ -4,7 +4,7 @@ import { EventPulseLogo } from "@/components/common/EventPulseLogo";
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
 import { usePathname } from "next/navigation";
-import { navItems } from "./dashboard-data";
+import { navItems } from "../overview/dashboard-data";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
