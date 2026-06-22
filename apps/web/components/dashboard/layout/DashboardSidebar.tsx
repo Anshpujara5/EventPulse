@@ -37,9 +37,6 @@ export function DashboardSidebar() {
             >
               <Icon name={icon} className="size-5" />
               <span>{item}</span>
-              {item === "Alerts" ? (
-                <span className="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-xs text-white">3</span>
-              ) : null}
             </a>
           );
         })}
