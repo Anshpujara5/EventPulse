@@ -9,19 +9,22 @@ import { useEffect, useState, type ReactNode } from "react";
 type MeResponse = {
   success: boolean;
   data: {
-    user: {
-      id: string;
-      name: string;
-      email: string;
-      createdAt: string;
-      updatedAt?: string;
-    };
+    user: DashboardUser;
   };
+};
+
+type DashboardUser = {
+  id: string;
+  name?: string;
+  email: string;
+  createdAt: string;
+  updatedAt?: string;
 };
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [user, setUser] = useState<DashboardUser | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -34,7 +37,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     async function verifySession() {
       try {
-        await apiRequest<MeResponse>("/api/auth/me", {
+        const response = await apiRequest<MeResponse>("/api/auth/me", {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -42,6 +45,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         });
 
         if (isActive) {
+          setUser(response.data.user);
           setIsAuthorized(true);
         }
       } catch {
@@ -75,7 +79,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <DashboardSidebar />
 
         <section className="min-w-0">
-          <DashboardHeader />
+          <DashboardHeader userEmail={user?.email} userName={user?.name} />
           {children}
         </section>
       </div>

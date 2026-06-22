@@ -20,6 +20,29 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+:where(button:not(:disabled), a[href], [role="button"], summary) {
+  cursor: pointer;
+}
+
+:where(button, a[href], [role="button"], summary) {
+  transition-duration: 180ms;
+  transition-property: background-color, border-color, box-shadow, color, filter, opacity;
+  transition-timing-function: ease;
+}
+
+:where(button:not(:disabled), [role="button"]):hover {
+  border-color: rgb(56 189 248 / 0.45);
+  filter: brightness(1.06);
+}
+
+:where(a[href]):hover {
+  color: rgb(103 232 249);
+}
+
+:where(button:disabled) {
+  cursor: not-allowed;
+}
+
 .signin-input:-webkit-autofill,
 .signin-input:-webkit-autofill:hover,
 .signin-input:-webkit-autofill:focus,
