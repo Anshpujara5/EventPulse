@@ -1,9 +1,5 @@
 import type { Response } from "express";
-import {
-  createProject,
-  getProjectByIdAndUserId,
-  getProjectsByUserId,
-} from "../data/memoryStore";
+import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
 import {
   isNonEmptyString,
@@ -49,11 +45,13 @@ export async function createProjectController(
     const normalizedDescription =
       description === undefined ? undefined : normalizeString(description);
 
-    const project = createProject({
-      name: normalizeString(name),
-      domain: normalizeString(domain),
-      description: normalizedDescription,
-      userId: req.user.userId,
+    const project = await prisma.project.create({
+      data: {
+        name: normalizeString(name),
+        domain: normalizeString(domain),
+        description: normalizedDescription,
+        userId: req.user.userId,
+      },
     });
 
     return res.status(201).json({
@@ -84,7 +82,14 @@ export async function getProjectsController(
       });
     }
 
-    const projects = getProjectsByUserId(req.user.userId);
+    const projects = await prisma.project.findMany({
+      where: {
+        userId: req.user.userId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
     return res.json({
       success: true,
@@ -122,7 +127,12 @@ export async function getProjectByIdController(
       });
     }
 
-    const project = getProjectByIdAndUserId(id, req.user.userId);
+    const project = await prisma.project.findFirst({
+      where: {
+        id,
+        userId: req.user.userId,
+      },
+    });
 
     if (!project) {
       return res.status(404).json({
