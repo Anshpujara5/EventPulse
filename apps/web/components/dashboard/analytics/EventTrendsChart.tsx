@@ -47,7 +47,7 @@ export function EventTrendsChart() {
         </svg>
         <div className="grid grid-cols-9 text-xs text-slate-500">
           {timeLabels.map((label, index) => (
-            <span className={index === timeLabels.length - 1 ? "text-right" : ""} key={label}>
+            <span className={index === timeLabels.length - 1 ? "text-right" : ""} key={`${label}-${index}`}>
               {label}
             </span>
           ))}

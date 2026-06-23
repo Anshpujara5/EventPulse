@@ -41,8 +41,8 @@ export function EventThroughputChart() {
       </div>
 
       <div className="mt-3 grid grid-cols-5 text-xs text-slate-500">
-        {["18:00", "00:00", "06:00", "12:00", "18:00"].map((label) => (
-          <span className="last:text-right" key={label}>
+        {["18:00", "00:00", "06:00", "12:00", "18:00"].map((label, index) => (
+          <span className="last:text-right" key={`${label}-${index}`}>
             {label}
           </span>
         ))}
