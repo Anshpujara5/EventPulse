@@ -1,9 +1,5 @@
 import type { Request, Response } from "express";
-import {
-  createUser,
-  findUserByEmail,
-  findUserById,
-} from "../data/memoryStore";
+import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
 import { signToken } from "../utils/jwt";
 import { comparePassword, hashPassword } from "../utils/password";
@@ -43,7 +39,11 @@ export async function signup(req: Request, res: Response) {
 
     const normalizedName = normalizeString(name);
     const normalizedEmail = normalizeEmail(email);
-    const existingUser = findUserByEmail(normalizedEmail);
+    const existingUser = await prisma.user.findUnique({
+      where: {
+        email: normalizedEmail,
+      },
+    });
 
     if (existingUser) {
       return res.status(409).json({
@@ -54,10 +54,12 @@ export async function signup(req: Request, res: Response) {
 
     const passwordHash = await hashPassword(password);
 
-    const user = createUser({
-      name: normalizedName,
-      email: normalizedEmail,
-      passwordHash,
+    const user = await prisma.user.create({
+      data: {
+        name: normalizedName,
+        email: normalizedEmail,
+        passwordHash,
+      },
     });
 
     const token = signToken({
@@ -106,7 +108,11 @@ export async function signin(req: Request, res: Response) {
     }
 
     const normalizedEmail = normalizeEmail(email);
-    const user = findUserByEmail(normalizedEmail);
+    const user = await prisma.user.findUnique({
+      where: {
+        email: normalizedEmail,
+      },
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -160,7 +166,11 @@ export async function me(req: AuthRequest, res: Response) {
       });
     }
 
-    const user = findUserById(req.user.userId);
+    const user = await prisma.user.findUnique({
+      where: {
+        email: req.user.email,
+      },
+    });
 
     if (!user) {
       return res.status(404).json({
