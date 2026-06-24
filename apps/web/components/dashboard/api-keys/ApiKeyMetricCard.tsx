@@ -1,11 +1,21 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
-import type { apiKeyMetrics } from "./api-keys-data";
+
+export type ApiKeyMetric = {
+  boxClassName: string;
+  deltaContext: string;
+  icon: string;
+  label: string;
+  negative: boolean;
+  spark: string;
+  tone: string;
+  value: string;
+};
 
 export function ApiKeyMetricCard({
   metric,
 }: {
-  metric: (typeof apiKeyMetrics)[number];
+  metric: ApiKeyMetric;
 }) {
   return (
     <GlowCard className="p-5">
@@ -20,7 +30,7 @@ export function ApiKeyMetricCard({
               metric.negative ? "text-rose-400" : "text-emerald-400"
             }`}
           >
-            {metric.negative ? "↓" : "↑"} {metric.delta}{" "}
+            {metric.negative ? "↓" : "↑"}{" "}
             <span className="font-medium text-slate-500">{metric.deltaContext}</span>
           </p>
         </div>

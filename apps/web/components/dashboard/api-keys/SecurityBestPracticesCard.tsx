@@ -1,6 +1,12 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
-import { bestPractices } from "./api-keys-data";
+
+const bestPractices = [
+  "Rotate production keys every 90 days",
+  "Use separate keys for client and server events",
+  "Revoke unused keys immediately",
+  "Never expose server keys in frontend code",
+] as const;
 
 export function SecurityBestPracticesCard() {
   return (

@@ -14,6 +14,7 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   projects     Project[]
+  apiKeys      ApiKey[]
 }
 
 model Project {
@@ -26,9 +27,33 @@ model Project {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  apiKeys     ApiKey[]
+}
+
+model ApiKey {
+  id         String       @id @default(cuid())
+  name       String
+  keyHash    String       @unique
+  keyPrefix  String
+  maskedKey  String
+  permissions String      @default("Ingest Events")
+  status     ApiKeyStatus @default(ACTIVE)
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId  String
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 }
 
 enum ProjectStatus {
   ACTIVE
   INACTIVE
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
 }

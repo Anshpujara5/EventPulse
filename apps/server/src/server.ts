@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import apiKeyRoutes from "./routes/apiKey.routes";
 import authRoutes from "./routes/auth.routes";
 import projectRoutes from "./routes/project.routes";
 
@@ -22,6 +23,7 @@ app.use((req, _res, next) => {
 });
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/api-keys", apiKeyRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({

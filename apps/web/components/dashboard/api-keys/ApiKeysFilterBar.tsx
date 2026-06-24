@@ -1,6 +1,14 @@
 import { Icon } from "@/components/common/Icon";
 
-export function ApiKeysFilterBar() {
+export function ApiKeysFilterBar({
+  onCreateClick,
+  onSearchChange,
+  searchQuery,
+}: {
+  onCreateClick: () => void;
+  onSearchChange: (value: string) => void;
+  searchQuery: string;
+}) {
   return (
     <section className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
       <div className="flex flex-col gap-3 lg:flex-row">
@@ -8,11 +16,13 @@ export function ApiKeysFilterBar() {
           <Icon name="search" className="size-5" />
           <input
             className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+            onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search API keys..."
+            value={searchQuery}
           />
         </div>
         {[
-          ["Production App", "cube"],
+          ["All Projects", "cube"],
           ["All Statuses", "list"],
         ].map(([label, icon]) => (
           <button
@@ -30,6 +40,7 @@ export function ApiKeysFilterBar() {
       </div>
       <button
         className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
+        onClick={onCreateClick}
         type="button"
       >
         <span className="text-xl leading-none">+</span>
