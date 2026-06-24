@@ -25,7 +25,7 @@ export type ApiKeyCreateResponse = {
   message: string;
   data: {
     apiKey: ApiKey;
-    rawApiKey: string;
+    rawApiKey?: string | null;
   };
 };
 

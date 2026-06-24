@@ -206,10 +206,12 @@ export function ApiKeysOverview() {
 
       setApiKeys((currentKeys) => [response.data.apiKey, ...currentKeys]);
       setSelectedApiKeyId(response.data.apiKey.id);
-      setNewApiKey({
-        apiKey: response.data.apiKey,
-        rawApiKey: response.data.rawApiKey,
-      });
+      if (response.data.rawApiKey) {
+        setNewApiKey({
+          apiKey: response.data.apiKey,
+          rawApiKey: response.data.rawApiKey,
+        });
+      }
       setForm(emptyForm);
       setIsCreateOpen(false);
     } catch (requestError) {
@@ -222,6 +224,11 @@ export function ApiKeysOverview() {
       setIsCreating(false);
     }
   };
+
+  const selectedRawApiKey =
+    newApiKey && selectedApiKey && newApiKey.apiKey.id === selectedApiKey.id
+      ? newApiKey.rawApiKey
+      : undefined;
 
   const handleRevokeApiKey = async (id: string) => {
     try {
@@ -342,11 +349,7 @@ export function ApiKeysOverview() {
           <SecurityBestPracticesCard />
           <ApiKeyDetailsPanel
             apiKey={selectedApiKey}
-            rawApiKey={
-              newApiKey?.apiKey.id === selectedApiKey?.id
-                ? newApiKey.rawApiKey
-                : undefined
-            }
+            rawApiKey={selectedRawApiKey}
             onRevoke={handleRevokeApiKey}
           />
         </aside>
