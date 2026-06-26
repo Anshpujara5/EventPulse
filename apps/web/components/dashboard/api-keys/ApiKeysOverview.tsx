@@ -94,6 +94,8 @@ export function ApiKeysOverview() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createError, setCreateError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [newApiKey, setNewApiKey] = useState<NewApiKey | null>(null);
 
@@ -232,7 +234,8 @@ export function ApiKeysOverview() {
 
   const handleRevokeApiKey = async (id: string) => {
     try {
-      setError("");
+      setRevokeError("");
+      setIsRevoking(true);
       const response = await apiRequest<{
         success: boolean;
         message: string;
@@ -247,12 +250,18 @@ export function ApiKeysOverview() {
           apiKey.id === id ? response.data.apiKey : apiKey,
         ),
       );
+      // Clear the raw key banner if the revoked key was the newly created one
+      setNewApiKey((current) =>
+        current?.apiKey.id === id ? null : current,
+      );
     } catch (requestError) {
-      setError(
+      setRevokeError(
         requestError instanceof Error
           ? requestError.message
           : "Unable to revoke API key",
       );
+    } finally {
+      setIsRevoking(false);
     }
   };
 
@@ -299,21 +308,38 @@ export function ApiKeysOverview() {
                     </p>
                   </div>
                 </div>
-                <button
-                  className="h-10 rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-4 text-xs font-black text-cyan-200 transition hover:bg-cyan-400/15"
-                  onClick={() => navigator.clipboard.writeText(newApiKey.rawApiKey)}
-                  type="button"
-                >
-                  Copy key
-                </button>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    className="h-10 rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-4 text-xs font-black text-cyan-200 transition hover:bg-cyan-400/15"
+                    onClick={() => navigator.clipboard.writeText(newApiKey.rawApiKey)}
+                    type="button"
+                  >
+                    Copy key
+                  </button>
+                  <button
+                    aria-label="Dismiss"
+                    className="flex size-10 items-center justify-center rounded-lg border border-slate-700/80 bg-slate-950/35 text-slate-400 transition hover:text-white"
+                    onClick={() => setNewApiKey(null)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             </section>
+          ) : null}
+
+          {revokeError ? (
+            <p className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-bold text-rose-300">
+              {revokeError}
+            </p>
           ) : null}
 
           <ApiKeysTable
             apiKeys={filteredApiKeys}
             error={error}
             isLoading={isLoading}
+            isRevoking={isRevoking}
             onCreateClick={handleOpenCreate}
             onRetry={loadData}
             onRevoke={handleRevokeApiKey}
@@ -349,6 +375,7 @@ export function ApiKeysOverview() {
           <SecurityBestPracticesCard />
           <ApiKeyDetailsPanel
             apiKey={selectedApiKey}
+            isRevoking={isRevoking}
             rawApiKey={selectedRawApiKey}
             onRevoke={handleRevokeApiKey}
           />

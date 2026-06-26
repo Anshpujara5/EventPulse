@@ -12,10 +12,12 @@ function formatDate(value: string) {
 
 export function ApiKeyDetailsPanel({
   apiKey,
+  isRevoking,
   onRevoke,
   rawApiKey,
 }: {
   apiKey?: ApiKey;
+  isRevoking?: boolean;
   onRevoke: (id: string) => void;
   rawApiKey?: string;
 }) {
@@ -80,7 +82,7 @@ export function ApiKeyDetailsPanel({
             </button>
             <button
               className="rounded-lg border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-300 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={apiKey.status === "REVOKED"}
+              disabled={apiKey.status === "REVOKED" || !!isRevoking}
               onClick={() => onRevoke(apiKey.id)}
               type="button"
             >
