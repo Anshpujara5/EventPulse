@@ -157,6 +157,44 @@ export async function signin(req: Request, res: Response) {
   }
 }
 
+export async function updateMe(req: AuthRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const { name } = req.body;
+
+    if (!isNonEmptyString(name)) {
+      return res.status(400).json({ success: false, message: "Name is required" });
+    }
+
+    const normalizedName = normalizeString(name);
+
+    const user = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { name: normalizedName },
+    });
+
+    return res.json({
+      success: true,
+      message: "Profile updated successfully",
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+}
+
 export async function me(req: AuthRequest, res: Response) {
   try {
     if (!req.user) {
