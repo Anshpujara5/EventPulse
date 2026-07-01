@@ -2,8 +2,10 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import apiKeyRoutes from "./routes/apiKey.routes";
+import analyticsRoutes from "./routes/analytics.routes";
 import authRoutes from "./routes/auth.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import eventRoutes from "./routes/event.routes";
 import projectRoutes from "./routes/project.routes";
 
 dotenv.config();
@@ -26,6 +28,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/api-keys", apiKeyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/events", eventRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({
