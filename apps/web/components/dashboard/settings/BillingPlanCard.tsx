@@ -1,48 +1,37 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
-import { billingUsage } from "./settings-data";
 
 export function BillingPlanCard() {
   return (
-    <GlowCard className="p-5">
-      <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-blue-500/10 text-cyan-300">
-          <Icon name="database" />
+    <GlowCard className="flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 border-b border-slate-800/60 px-5 py-4">
+        <div className="flex size-7 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 ring-1 ring-violet-400/20">
+          <Icon className="size-3.5" name="database" />
         </div>
-        <h2 className="text-lg font-black text-white">Billing / Plan</h2>
+        <span className="text-sm font-bold text-white">Billing &amp; Plan</span>
       </div>
 
-      <div className="mt-6 flex items-center justify-between border-b border-slate-800/80 pb-4">
-        <span className="text-sm text-slate-400">Current Plan</span>
-        <span className="flex items-center gap-2 text-sm font-black text-white">
-          <Icon name="shield" className="size-5 text-violet-400" />
-          Pro Plan
-        </span>
+      {/* Honest empty state */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center">
+        <div className="mb-3 flex size-10 items-center justify-center rounded-xl border border-slate-800/60 bg-slate-900/60 text-slate-600">
+          <Icon className="size-5" name="database" />
+        </div>
+        <p className="text-sm font-medium text-slate-400">Not connected</p>
+        <p className="mt-1.5 max-w-[200px] text-[11px] leading-relaxed text-slate-600">
+          Billing and plan details will appear here when billing is configured.
+        </p>
       </div>
 
-      <div className="mt-5 space-y-5">
-        {billingUsage.map((item) => (
-          <div key={item.label}>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">{item.label}</span>
-              <span className="font-bold text-white">{item.value}</span>
-              <span className="text-slate-500">{item.percent}</span>
-            </div>
-            <div className="mt-2 h-2 rounded-full bg-slate-800">
-              <div className={`h-full rounded-full bg-blue-500 ${item.width}`} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-5 flex items-center justify-between border-t border-slate-800/80 pt-4 text-sm">
-        <span className="text-slate-400">Renewal</span>
-        <span className="font-black text-white">Jul 18, 2026</span>
-      </div>
-
-      <div className="mt-6 flex justify-center">
-        <button className="h-11 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-6 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]" type="button">
-          Upgrade Plan
+      {/* CTA — disabled */}
+      <div className="border-t border-slate-800/60 px-5 py-4">
+        <button
+          className="h-8 w-full cursor-not-allowed rounded-lg border border-slate-700/70 bg-slate-900/60 text-xs font-semibold text-slate-500"
+          disabled
+          title="Coming soon"
+          type="button"
+        >
+          Billing — coming soon
         </button>
       </div>
     </GlowCard>

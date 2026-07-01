@@ -1,31 +1,70 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
-import { securitySettings } from "./settings-data";
+
+type ValidIcon = "shield" | "clock" | "key" | "user";
+
+const rows: { label: string; value: string; icon: ValidIcon; badge: string }[] = [
+  {
+    label: "Two-factor auth",
+    value: "Not configured",
+    icon: "shield",
+    badge: "border-slate-600/50 bg-slate-800/50 text-slate-400",
+  },
+  {
+    label: "Session timeout",
+    value: "Not configured",
+    icon: "clock",
+    badge: "border-slate-600/50 bg-slate-800/50 text-slate-400",
+  },
+  {
+    label: "API key rotation",
+    value: "Not configured",
+    icon: "key",
+    badge: "border-slate-600/50 bg-slate-800/50 text-slate-400",
+  },
+  {
+    label: "SSO",
+    value: "Coming soon",
+    icon: "user",
+    badge: "border-slate-600/50 bg-slate-800/50 text-slate-400",
+  },
+];
 
 export function SecuritySettingsCard() {
   return (
-    <GlowCard className="p-5">
-      <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-blue-500/10 text-cyan-300">
-          <Icon name="shield" />
+    <GlowCard className="flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 border-b border-slate-800/60 px-5 py-4">
+        <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-400/20">
+          <Icon className="size-3.5" name="shield" />
         </div>
-        <h2 className="text-lg font-black text-white">Security Settings</h2>
+        <span className="text-sm font-bold text-white">Security</span>
       </div>
 
-      <div className="mt-5">
-        {securitySettings.map(([label, value, icon]) => (
-          <button className="flex w-full items-center gap-3 border-b border-slate-800/80 py-4 text-left last:border-b-0" key={label} type="button">
-            <Icon name={icon} className="size-5 text-slate-400" />
-            <span className="min-w-0 flex-1 text-sm text-slate-300">{label}</span>
-            <span className={`text-sm font-bold ${value === "Enabled" ? "text-emerald-400" : "text-white"}`}>{value}</span>
-            <span className="text-xl text-slate-500">›</span>
-          </button>
+      {/* Rows */}
+      <div className="flex flex-1 flex-col divide-y divide-slate-800/50 px-5">
+        {rows.map((row) => (
+          <div className="flex items-center gap-3 py-3.5" key={row.label}>
+            <Icon className="size-3.5 shrink-0 text-slate-600" name={row.icon} />
+            <span className="min-w-0 flex-1 text-sm text-slate-400">{row.label}</span>
+            <span
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${row.badge}`}
+            >
+              {row.value}
+            </span>
+          </div>
         ))}
       </div>
 
-      <div className="mt-6 flex justify-center">
-        <button className="h-11 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-6 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]" type="button">
-          Manage Security
+      {/* CTA — disabled, not yet wired */}
+      <div className="border-t border-slate-800/60 px-5 py-4">
+        <button
+          className="h-8 w-full cursor-not-allowed rounded-lg border border-slate-700/70 bg-slate-900/60 text-xs font-semibold text-slate-500"
+          disabled
+          title="Coming soon"
+          type="button"
+        >
+          Configure Security — coming soon
         </button>
       </div>
     </GlowCard>
