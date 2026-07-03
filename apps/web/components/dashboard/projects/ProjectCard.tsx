@@ -1,4 +1,5 @@
 import { Icon } from "@/components/common/Icon";
+import Link from "next/link";
 
 export type Project = {
   id: string;
@@ -75,16 +76,20 @@ export function ProjectCard({
       </p>
 
       <div className="flex items-center gap-2 lg:justify-end">
-        {["View", "Settings"].map((action) => (
-          <button
-            className="w-19 cursor-not-allowed rounded-lg border border-slate-700/70 bg-slate-950/35 px-3 py-2 text-xs font-bold text-slate-600"
-            disabled
-            key={action}
-            title="Coming soon"
-            type="button"
+        {[
+          { label: "View", href: `/dashboard/projects/${project.id}` },
+          {
+            label: "Settings",
+            href: `/dashboard/projects/${project.id}/settings`,
+          },
+        ].map((action) => (
+          <Link
+            className="inline-flex w-19 items-center justify-center rounded-lg border border-slate-700/80 bg-slate-950/35 px-3 py-2 text-xs font-bold text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-300"
+            href={action.href}
+            key={action.label}
           >
-            {action}
-          </button>
+            {action.label}
+          </Link>
         ))}
       </div>
     </div>
