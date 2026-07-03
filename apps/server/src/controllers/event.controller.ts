@@ -35,6 +35,26 @@ interface ActiveApiKeyRow {
 }
 
 // ---------------------------------------------------------------------------
+// Ingestion validation limits
+// ---------------------------------------------------------------------------
+
+const MAX_EVENT_NAME_LENGTH = 120;
+// Serialized properties cap — a simple in-controller guard (Express also caps
+// the whole body at its default 100kb). No extra libraries required.
+const MAX_PROPERTIES_BYTES = 16 * 1024;
+// Reject control characters (newlines, tabs, null, etc.) in event names while
+// still allowing names like page_view, checkout.completed, user-signup.
+function hasControlChars(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/events/ingest  — authenticated via raw API key (not JWT)
 // ---------------------------------------------------------------------------
 
@@ -101,10 +121,33 @@ export async function ingestEventController(req: Request, res: Response) {
       properties: unknown;
     };
 
-    if (typeof name !== "string" || name.trim().length === 0) {
+    if (typeof name !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Event name is required and must be a non-empty string",
+        message: "Event name is required and must be a string",
+      });
+    }
+
+    const eventName = name.trim();
+
+    if (eventName.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Event name must not be empty",
+      });
+    }
+
+    if (eventName.length > MAX_EVENT_NAME_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `Event name must be between 1 and ${MAX_EVENT_NAME_LENGTH} characters`,
+      });
+    }
+
+    if (hasControlChars(eventName)) {
+      return res.status(400).json({
+        success: false,
+        message: "Event name must not contain control characters",
       });
     }
 
@@ -116,7 +159,7 @@ export async function ingestEventController(req: Request, res: Response) {
     ) {
       return res.status(400).json({
         success: false,
-        message: "properties must be a plain object if provided",
+        message: "properties must be a plain JSON object if provided",
       });
     }
 
@@ -129,11 +172,20 @@ export async function ingestEventController(req: Request, res: Response) {
     const eventId = crypto.randomUUID();
     const propertiesJson = JSON.stringify(safeProperties);
 
+    if (propertiesJson.length > MAX_PROPERTIES_BYTES) {
+      return res.status(400).json({
+        success: false,
+        message: `properties payload is too large (max ${
+          MAX_PROPERTIES_BYTES / 1024
+        }KB)`,
+      });
+    }
+
     await prisma.$executeRaw`
       INSERT INTO "Event" (id, name, properties, "userId", "projectId", "apiKeyId", "createdAt")
       VALUES (
         ${eventId},
-        ${name.trim()},
+        ${eventName},
         ${propertiesJson}::jsonb,
         ${apiKeyRow.userId},
         ${apiKeyRow.projectId},
@@ -160,9 +212,11 @@ export async function ingestEventController(req: Request, res: Response) {
 
     return res.status(201).json({
       success: true,
-      message: "Event ingested successfully",
-      data: {
-        event: createdEvent,
+      event: {
+        id: createdEvent.id,
+        name: createdEvent.name,
+        projectId: createdEvent.projectId,
+        createdAt: createdEvent.createdAt,
       },
     });
   } catch (error) {

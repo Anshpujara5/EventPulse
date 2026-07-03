@@ -449,7 +449,13 @@ export function ProjectView({ projectId }: { projectId: string }) {
             <p className="text-xs text-slate-500">
               Replace the placeholder with an API key from this project. For
               security, EventPulse shows a key&apos;s full value only once, at
-              creation time.
+              creation time.{" "}
+              <Link
+                className="font-bold text-cyan-300 hover:text-cyan-200"
+                href="/dashboard/docs"
+              >
+                Read the docs →
+              </Link>
             </p>
           </div>
         )}

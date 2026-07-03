@@ -1,5 +1,6 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import Link from "next/link";
 
 const bestPractices = [
   "Rotate production keys every 90 days",
@@ -24,6 +25,15 @@ export function SecurityBestPracticesCard() {
             <span>{item}</span>
           </div>
         ))}
+      </div>
+      <div className="mt-5 border-t border-slate-800/70 pt-4">
+        <Link
+          className="inline-flex items-center gap-2 text-sm font-bold text-cyan-300 transition hover:text-cyan-200"
+          href="/dashboard/docs"
+        >
+          <Icon name="document" className="size-4" />
+          Read the ingestion docs →
+        </Link>
       </div>
     </GlowCard>
   );

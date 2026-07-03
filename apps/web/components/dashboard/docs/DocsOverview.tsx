@@ -1,0 +1,255 @@
+"use client";
+
+import { GlowCard } from "@/components/common/GlowCard";
+import { Icon } from "@/components/common/Icon";
+import Link from "next/link";
+import { useState } from "react";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
+
+const INGEST_ENDPOINT = `${API_BASE}/api/events/ingest`;
+
+const SAMPLE_BODY = `{
+  "name": "page_view",
+  "properties": {
+    "path": "/dashboard",
+    "source": "docs"
+  }
+}`;
+
+const SAMPLE_CURL = `curl -X POST ${INGEST_ENDPOINT} \\
+  -H "Authorization: Bearer <API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"page_view","properties":{"path":"/dashboard","source":"docs"}}'`;
+
+const EVENT_NAME_EXAMPLES = [
+  "page_view",
+  "button_clicked",
+  "checkout.completed",
+  "user-signup",
+] as const;
+
+const ERROR_RESPONSES: { code: string; label: string; detail: string }[] = [
+  {
+    code: "400",
+    label: "Invalid payload",
+    detail:
+      "Missing or empty name, name over 120 characters, or properties that aren't a plain JSON object.",
+  },
+  {
+    code: "401",
+    label: "Missing / invalid API key",
+    detail: "No API key header was sent, or the key does not match any project.",
+  },
+  {
+    code: "403",
+    label: "Revoked key or archived project",
+    detail:
+      "The API key was revoked, or its project is archived so ingestion is paused.",
+  },
+];
+
+export function DocsOverview() {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  function copy(id: string, text: string) {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    });
+  }
+
+  return (
+    <div className="mx-auto max-w-[960px] px-4 py-5 sm:px-6">
+      <div>
+        <h1 className="text-3xl font-black tracking-tight">Developer Docs</h1>
+        <p className="mt-1 text-sm text-slate-400">
+          Send events to EventPulse from your app using a project API key.
+        </p>
+      </div>
+
+      {/* Authentication */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-500/10 text-cyan-400">
+            <Icon name="key" className="size-5" />
+          </div>
+          <h2 className="text-lg font-black text-white">Authentication</h2>
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-slate-300">
+          Every ingestion request is authenticated with an API key that belongs
+          to one of your projects. Create keys on the{" "}
+          <Link
+            className="font-bold text-cyan-300 hover:text-cyan-200"
+            href="/dashboard/api-keys"
+          >
+            API Keys
+          </Link>{" "}
+          page. A key&apos;s full value is shown only once, at creation time —
+          store it securely. Send it using one of these headers:
+        </p>
+        <pre className="mt-4 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-slate-300">
+          {`Authorization: Bearer <API_KEY>\nx-api-key: <API_KEY>`}
+        </pre>
+      </GlowCard>
+
+      {/* Send an event */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-violet-400/25 bg-violet-500/10 text-violet-300">
+            <Icon name="bolt" className="size-5" />
+          </div>
+          <h2 className="text-lg font-black text-white">Send an event</h2>
+        </div>
+
+        <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+          Endpoint
+        </p>
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-4 py-3">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-cyan-100">
+            POST {INGEST_ENDPOINT}
+          </code>
+          <button
+            className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-950/50 px-3 py-1.5 text-xs font-black text-cyan-300 transition hover:border-cyan-300/35"
+            onClick={() => copy("endpoint", INGEST_ENDPOINT)}
+            type="button"
+          >
+            {copied === "endpoint" ? "Copied!" : "Copy"}
+          </button>
+        </div>
+
+        <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+          Request body
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-cyan-100">
+          {SAMPLE_BODY}
+        </pre>
+        <p className="mt-2 text-xs text-slate-500">
+          <span className="font-bold text-slate-400">name</span> is required.{" "}
+          <span className="font-bold text-slate-400">properties</span> is
+          optional and must be a plain JSON object.
+        </p>
+      </GlowCard>
+
+      {/* Curl example */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-500/10 text-cyan-400">
+              <Icon name="code" className="size-5" />
+            </div>
+            <h2 className="text-lg font-black text-white">Curl example</h2>
+          </div>
+          <button
+            className="rounded-lg border border-slate-700/80 bg-slate-950/50 px-3 py-1.5 text-xs font-black text-cyan-300 transition hover:border-cyan-300/35"
+            onClick={() => copy("curl", SAMPLE_CURL)}
+            type="button"
+          >
+            {copied === "curl" ? "Copied!" : "Copy curl"}
+          </button>
+        </div>
+        <pre className="mt-4 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-slate-300">
+          {SAMPLE_CURL}
+        </pre>
+        <p className="mt-2 text-xs text-slate-500">
+          Replace the placeholder with a real API key from one of your projects.
+          Keys are never shown in this documentation.
+        </p>
+      </GlowCard>
+
+      {/* Event naming rules */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 text-emerald-300">
+            <Icon name="list" className="size-5" />
+          </div>
+          <h2 className="text-lg font-black text-white">Event naming rules</h2>
+        </div>
+        <ul className="mt-4 space-y-2 text-sm text-slate-300">
+          <li className="flex gap-2">
+            <span className="text-cyan-400">•</span>
+            Between 1 and 120 characters after trimming whitespace.
+          </li>
+          <li className="flex gap-2">
+            <span className="text-cyan-400">•</span>
+            No control characters (newlines, tabs, etc.).
+          </li>
+          <li className="flex gap-2">
+            <span className="text-cyan-400">•</span>
+            Simple, descriptive names work best.
+          </li>
+        </ul>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {EVENT_NAME_EXAMPLES.map((example) => (
+            <code
+              className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 font-mono text-xs text-cyan-100"
+              key={example}
+            >
+              {example}
+            </code>
+          ))}
+        </div>
+      </GlowCard>
+
+      {/* Error responses */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-300">
+            <Icon name="shield" className="size-5" />
+          </div>
+          <h2 className="text-lg font-black text-white">Error responses</h2>
+        </div>
+        <div className="mt-4 grid gap-3">
+          {ERROR_RESPONSES.map((row) => (
+            <div
+              className="flex flex-col gap-1 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
+              key={row.code}
+            >
+              <span className="inline-flex h-7 w-14 shrink-0 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-900/60 font-mono text-xs font-black text-rose-300">
+                {row.code}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white">{row.label}</p>
+                <p className="text-xs text-slate-400">{row.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </GlowCard>
+
+      {/* Where to see events */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-blue-400/25 bg-blue-500/10 text-blue-300">
+            <Icon name="pulse" className="size-5" />
+          </div>
+          <h2 className="text-lg font-black text-white">Where to see events</h2>
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-slate-300">
+          Once ingested, events appear on the{" "}
+          <Link
+            className="font-bold text-cyan-300 hover:text-cyan-200"
+            href="/dashboard/events"
+          >
+            Events
+          </Link>{" "}
+          page and under each project&apos;s{" "}
+          <Link
+            className="font-bold text-cyan-300 hover:text-cyan-200"
+            href="/dashboard/projects"
+          >
+            project view
+          </Link>
+          . Aggregated metrics are on the{" "}
+          <Link
+            className="font-bold text-cyan-300 hover:text-cyan-200"
+            href="/dashboard/analytics"
+          >
+            Analytics
+          </Link>{" "}
+          page.
+        </p>
+      </GlowCard>
+    </div>
+  );
+}

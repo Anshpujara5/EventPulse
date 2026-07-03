@@ -10,7 +10,9 @@ export function DashboardSidebar() {
       <div className="hidden px-4 lg:absolute lg:bottom-4 lg:left-0 lg:right-0 lg:block">
         <SidebarPlanCard />
         <div className="flex items-center justify-between px-3 py-2 text-sm font-bold text-slate-400">
-          <span>Docs</span>
+          <a className="transition hover:text-white" href="/dashboard/docs">
+            Docs
+          </a>
           <span>Support</span>
         </div>
       </div>
