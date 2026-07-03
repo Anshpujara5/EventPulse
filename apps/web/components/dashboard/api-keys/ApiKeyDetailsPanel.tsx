@@ -21,11 +21,18 @@ export function ApiKeyDetailsPanel({
   onRevoke: (id: string) => void;
   rawApiKey?: string;
 }) {
-  const detailRows = apiKey
+  const detailRows: [string, string][] = apiKey
     ? [
         ["Name", apiKey.name],
         ["Project", apiKey.project.name],
         ["Status", apiKey.status === "ACTIVE" ? "Active" : "Revoked"],
+        [
+          "Last Used",
+          apiKey.lastUsedAt ? formatDate(apiKey.lastUsedAt) : "Never used",
+        ],
+        ...(apiKey.project.status === "INACTIVE"
+          ? ([["Ingestion", "Paused (project archived)"]] as [string, string][])
+          : []),
         ["Permissions", apiKey.permissions],
         ["Key Prefix", apiKey.keyPrefix],
         ["Created", formatDate(apiKey.createdAt)],

@@ -343,3 +343,97 @@ export async function getProjectSummaryController(
     });
   }
 }
+
+// Archive/restore is a non-destructive status flip. Archiving sets the project
+// INACTIVE (pausing ingestion) without deleting any events or API keys;
+// restoring sets it back to ACTIVE. Both are ownership-checked.
+async function setProjectStatus(
+  req: AuthRequest,
+  res: Response,
+  status: ProjectStatus,
+  successMessage: string,
+) {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
+  }
+
+  const { id } = req.params;
+
+  if (typeof id !== "string") {
+    return res.status(404).json({
+      success: false,
+      message: "Project not found",
+    });
+  }
+
+  const existing = await prisma.project.findFirst({
+    where: {
+      id,
+      userId: req.user.userId,
+    },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return res.status(404).json({
+      success: false,
+      message: "Project not found",
+    });
+  }
+
+  const project = await prisma.project.update({
+    where: { id: existing.id },
+    data: { status },
+  });
+
+  return res.json({
+    success: true,
+    message: successMessage,
+    data: {
+      project,
+    },
+  });
+}
+
+export async function archiveProjectController(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    return await setProjectStatus(
+      req,
+      res,
+      ProjectStatus.INACTIVE,
+      "Project archived. Event ingestion is paused for this project.",
+    );
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function restoreProjectController(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    return await setProjectStatus(
+      req,
+      res,
+      ProjectStatus.ACTIVE,
+      "Project restored. Event ingestion is active again.",
+    );
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}

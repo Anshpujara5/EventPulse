@@ -4,6 +4,7 @@ export type ApiKeyProject = {
   id: string;
   name: string;
   domain: string;
+  status: "ACTIVE" | "INACTIVE";
 };
 
 export type ApiKey = {

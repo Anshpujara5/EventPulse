@@ -26,7 +26,7 @@ function formatDate(value: string) {
 }
 
 function formatLastUsed(value: string | null) {
-  return value ? formatDate(value) : "Never";
+  return value ? formatDate(value) : "Never used";
 }
 
 export function ApiKeysTable({
@@ -107,9 +107,16 @@ export function ApiKeysTable({
             <p className="min-w-0 truncate font-black text-white" title={apiKey.name}>
               {apiKey.name}
             </p>
-            <p className="min-w-0 truncate text-slate-400" title={apiKey.project.name}>
-              {apiKey.project.name}
-            </p>
+            <div className="min-w-0">
+              <p className="truncate text-slate-400" title={apiKey.project.name}>
+                {apiKey.project.name}
+              </p>
+              {apiKey.project.status === "INACTIVE" ? (
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-300/90">
+                  Ingestion paused
+                </p>
+              ) : null}
+            </div>
             <p className="flex min-w-0 items-center gap-2 font-mono text-xs text-slate-300">
               <span className="truncate" title={apiKey.maskedKey}>
                 {apiKey.maskedKey}

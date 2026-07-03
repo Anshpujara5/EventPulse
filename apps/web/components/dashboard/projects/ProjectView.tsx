@@ -49,6 +49,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -124,6 +125,13 @@ export function ProjectView({ projectId }: { projectId: string }) {
     void load();
   }, [load]);
 
+  function copy(id: string, text: string) {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    });
+  }
+
   const backLink = (
     <Link
       className="inline-flex items-center gap-2 text-sm font-bold text-slate-400 transition hover:text-cyan-300"
@@ -189,6 +197,20 @@ export function ProjectView({ projectId }: { projectId: string }) {
   }
 
   const isActive = project.status === "ACTIVE";
+  const isArchived = !isActive;
+  const hasActiveKey = apiKeys.some((key) => key.status === "ACTIVE");
+  const ingestEndpoint = `${API_BASE}/api/events/ingest`;
+  const sampleBody = `{
+  "name": "page_view",
+  "properties": {
+    "path": "/dashboard",
+    "source": "demo"
+  }
+}`;
+  const sampleCurl = `curl -X POST ${ingestEndpoint} \\
+  -H "Authorization: Bearer <API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"page_view","properties":{"path":"/dashboard","source":"demo"}}'`;
 
   const summaryCards = [
     {
@@ -292,6 +314,28 @@ export function ProjectView({ projectId }: { projectId: string }) {
         </div>
       </GlowCard>
 
+      {/* Archived notice */}
+      {isArchived ? (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-5 py-4">
+          <Icon name="clock" className="mt-0.5 size-5 shrink-0 text-amber-300" />
+          <div>
+            <p className="text-sm font-black text-amber-200">
+              Event ingestion is paused for this project.
+            </p>
+            <p className="mt-0.5 text-sm text-slate-300">
+              Existing events and API keys are kept.{" "}
+              <Link
+                className="font-bold text-amber-200 underline hover:text-amber-100"
+                href={`/dashboard/projects/${project.id}/settings`}
+              >
+                Restore the project
+              </Link>{" "}
+              to resume ingestion.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* Summary cards */}
       <section className="mt-4 grid gap-4 md:grid-cols-3">
         {summaryCards.map((card) => (
@@ -316,10 +360,113 @@ export function ProjectView({ projectId }: { projectId: string }) {
         ))}
       </section>
 
+      {/* Ingestion guide */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-500/10 text-cyan-400">
+            <Icon name="bolt" className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-white">
+              Send your first event
+            </h2>
+            <p className="text-sm text-slate-400">
+              Ingest events from your app using an API key for this project.
+            </p>
+          </div>
+        </div>
+
+        {isArchived ? (
+          <div className="mt-5 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-200">
+            Restore this project before sending events.
+          </div>
+        ) : !hasActiveKey ? (
+          <div className="mt-5 rounded-xl border border-slate-700/70 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+            Create an API key to start sending events.{" "}
+            <Link
+              className="font-bold text-cyan-300 hover:text-cyan-200"
+              href="/dashboard/api-keys"
+            >
+              Create API key →
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Endpoint
+              </p>
+              <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-4 py-3">
+                <code className="min-w-0 flex-1 truncate font-mono text-xs text-cyan-100">
+                  POST {ingestEndpoint}
+                </code>
+                <button
+                  className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-950/50 px-3 py-1.5 text-xs font-black text-cyan-300 transition hover:border-cyan-300/35"
+                  onClick={() => copy("endpoint", ingestEndpoint)}
+                  type="button"
+                >
+                  {copied === "endpoint" ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Auth header (use one)
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-slate-300">
+                {`Authorization: Bearer <API_KEY>\nx-api-key: <API_KEY>`}
+              </pre>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Request body
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-cyan-100">
+                {sampleBody}
+              </pre>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Example (curl)
+                </p>
+                <button
+                  className="rounded-lg border border-slate-700/80 bg-slate-950/50 px-3 py-1.5 text-xs font-black text-cyan-300 transition hover:border-cyan-300/35"
+                  onClick={() => copy("curl", sampleCurl)}
+                  type="button"
+                >
+                  {copied === "curl" ? "Copied!" : "Copy curl"}
+                </button>
+              </div>
+              <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-slate-300">
+                {sampleCurl}
+              </pre>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Replace the placeholder with an API key from this project. For
+              security, EventPulse shows a key&apos;s full value only once, at
+              creation time.
+            </p>
+          </div>
+        )}
+      </GlowCard>
+
       {/* API keys for this project */}
       <GlowCard className="mt-4 overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-800/70 px-5 py-4">
-          <h2 className="text-lg font-black text-white">API Keys</h2>
+          <div>
+            <h2 className="text-lg font-black text-white">API Keys</h2>
+            {isArchived && apiKeys.length > 0 ? (
+              <p className="mt-0.5 text-xs font-bold text-amber-300/90">
+                Ingestion is blocked for these keys while the project is
+                archived.
+              </p>
+            ) : null}
+          </div>
           <Link
             className="text-sm font-bold text-cyan-300 hover:text-cyan-200"
             href="/dashboard/api-keys"
@@ -364,7 +511,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
                   </span>
                 </div>
                 <p className="text-slate-400">
-                  {key.lastUsedAt ? formatDate(key.lastUsedAt) : "Never"}
+                  {key.lastUsedAt ? formatDate(key.lastUsedAt) : "Never used"}
                 </p>
                 <p className="text-slate-400">{formatDate(key.createdAt)}</p>
               </div>

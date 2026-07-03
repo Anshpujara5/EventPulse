@@ -24,6 +24,7 @@ const apiKeySelect = {
       id: true,
       name: true,
       domain: true,
+      status: true,
     },
   },
 };

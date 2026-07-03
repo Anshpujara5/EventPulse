@@ -38,6 +38,14 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState("");
+  // Persisted (server) status drives the Danger Zone; the form's status select
+  // is a separate direct edit and may differ until saved.
+  const [persistedStatus, setPersistedStatus] = useState<ProjectStatus>("ACTIVE");
+  const [confirmAction, setConfirmAction] = useState<"archive" | "restore" | null>(
+    null,
+  );
+  const [lifecycleStatus, setLifecycleStatus] = useState<SaveStatus>("idle");
+  const [lifecycleError, setLifecycleError] = useState("");
 
   const load = useCallback(async () => {
     setLoadStatus("loading");
@@ -68,6 +76,7 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
         status: project.status,
         description: project.description ?? "",
       });
+      setPersistedStatus(project.status);
       setLoadStatus("success");
     } catch {
       setLoadError("Could not reach server");
@@ -138,10 +147,49 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
         status: project.status,
         description: project.description ?? "",
       });
+      setPersistedStatus(project.status);
       setSaveStatus("saved");
     } catch {
       setSaveError("Could not reach server.");
       setSaveStatus("error");
+    }
+  }
+
+  async function runLifecycle(action: "archive" | "restore") {
+    setLifecycleStatus("saving");
+    setLifecycleError("");
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/projects/${projectId}/${action}`,
+        {
+          method: "PATCH",
+          headers: authHeaders(),
+        },
+      );
+
+      const body = (await res.json()) as {
+        success: boolean;
+        message?: string;
+        data?: { project: Project };
+      };
+
+      if (!res.ok || !body.success || !body.data) {
+        setLifecycleError(
+          body.message ?? `Failed to ${action} project.`,
+        );
+        setLifecycleStatus("error");
+        return;
+      }
+
+      const project = body.data.project;
+      setPersistedStatus(project.status);
+      setForm((current) => ({ ...current, status: project.status }));
+      setConfirmAction(null);
+      setLifecycleStatus("saved");
+    } catch {
+      setLifecycleError("Could not reach server.");
+      setLifecycleStatus("error");
     }
   }
 
@@ -153,6 +201,8 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
       <span aria-hidden>←</span> Projects
     </Link>
   );
+
+  const isArchived = persistedStatus === "INACTIVE";
 
   if (loadStatus === "loading") {
     return (
@@ -298,26 +348,132 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
         </form>
       </GlowCard>
 
-      {/* Danger zone — delete not implemented on the backend, honest coming-soon */}
+      {/* Danger zone — archive/restore (non-destructive status flip) */}
       <GlowCard className="mt-4 border-rose-500/25 p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-black text-rose-200">Danger zone</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Deleting a project removes its API keys and events. This is not
-              available yet.
-            </p>
+            {isArchived ? (
+              <p className="mt-1 text-sm text-slate-400">
+                This project is archived. Event ingestion is paused. Restoring
+                it resumes ingestion for its API keys.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-slate-400">
+                Archiving pauses event ingestion for this project. Existing
+                events and API keys are kept.
+              </p>
+            )}
           </div>
-          <button
-            className="h-11 shrink-0 cursor-not-allowed rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 text-sm font-black text-rose-300/70"
-            disabled
-            title="Coming soon"
-            type="button"
-          >
-            Project deletion — coming soon
-          </button>
+          {isArchived ? (
+            <button
+              className="h-11 shrink-0 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-5 text-sm font-black text-emerald-300 transition hover:bg-emerald-500/15"
+              onClick={() => {
+                setLifecycleStatus("idle");
+                setLifecycleError("");
+                setConfirmAction("restore");
+              }}
+              type="button"
+            >
+              Restore Project
+            </button>
+          ) : (
+            <button
+              className="h-11 shrink-0 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 text-sm font-black text-rose-300 transition hover:bg-rose-500/15"
+              onClick={() => {
+                setLifecycleStatus("idle");
+                setLifecycleError("");
+                setConfirmAction("archive");
+              }}
+              type="button"
+            >
+              Archive Project
+            </button>
+          )}
         </div>
+        {lifecycleStatus === "saved" && !confirmAction ? (
+          <p className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-300">
+            {isArchived
+              ? "Project archived. Event ingestion is paused."
+              : "Project restored. Event ingestion is active again."}
+          </p>
+        ) : null}
       </GlowCard>
+
+      {confirmAction ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              lifecycleStatus !== "saving"
+            ) {
+              setConfirmAction(null);
+            }
+          }}
+          role="dialog"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-700/80 bg-[#071426]/98 p-6 shadow-[0_24px_70px_rgba(0,0,0,0.5)]">
+            <h2 className="text-xl font-black text-white">
+              {confirmAction === "archive"
+                ? "Archive this project?"
+                : "Restore this project?"}
+            </h2>
+
+            {confirmAction === "archive" ? (
+              <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                <li className="flex gap-2">
+                  <span className="text-rose-300">•</span>
+                  New event ingestion will stop for this project.
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-emerald-300">•</span>
+                  Existing events and API keys will not be deleted.
+                </li>
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-slate-300">
+                Event ingestion will resume for this project&apos;s active API
+                keys.
+              </p>
+            )}
+
+            {lifecycleStatus === "error" ? (
+              <p className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-bold text-rose-300">
+                {lifecycleError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="h-11 rounded-xl border border-slate-700/80 bg-slate-950/50 px-5 text-sm font-bold text-slate-300 disabled:opacity-60"
+                disabled={lifecycleStatus === "saving"}
+                onClick={() => setConfirmAction(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className={`h-11 rounded-xl px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 ${
+                  confirmAction === "archive"
+                    ? "bg-rose-600 hover:bg-rose-500"
+                    : "bg-emerald-600 hover:bg-emerald-500"
+                }`}
+                disabled={lifecycleStatus === "saving"}
+                onClick={() => void runLifecycle(confirmAction)}
+                type="button"
+              >
+                {lifecycleStatus === "saving"
+                  ? "Working..."
+                  : confirmAction === "archive"
+                    ? "Archive Project"
+                    : "Restore Project"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

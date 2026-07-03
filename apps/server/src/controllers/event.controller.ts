@@ -31,6 +31,7 @@ interface ActiveApiKeyRow {
   userId: string;
   projectId: string;
   status: string;
+  projectStatus: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,9 +63,10 @@ export async function ingestEventController(req: Request, res: Response) {
     const keyHash = hashApiKey(rawKey);
 
     const [apiKeyRow] = await prisma.$queryRaw<ActiveApiKeyRow[]>`
-      SELECT id, "userId", "projectId", status
-      FROM "ApiKey"
-      WHERE "keyHash" = ${keyHash}
+      SELECT a.id, a."userId", a."projectId", a.status, p.status AS "projectStatus"
+      FROM "ApiKey" a
+      JOIN "Project" p ON p.id = a."projectId"
+      WHERE a."keyHash" = ${keyHash}
       LIMIT 1
     `;
 
@@ -79,6 +81,17 @@ export async function ingestEventController(req: Request, res: Response) {
       return res.status(403).json({
         success: false,
         message: "API key has been revoked",
+      });
+    }
+
+    // Block ingestion for archived (inactive) projects. Reject before storing
+    // the event or touching lastUsedAt — nothing is persisted for a paused
+    // project. Restoring the project re-enables ingestion.
+    if (apiKeyRow.projectStatus !== "ACTIVE") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Event ingestion is paused for this project. Restore the project to resume ingestion.",
       });
     }
 
