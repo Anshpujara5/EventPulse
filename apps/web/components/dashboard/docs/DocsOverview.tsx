@@ -22,6 +22,12 @@ const SAMPLE_CURL = `curl -X POST ${INGEST_ENDPOINT} \\
   -H "Content-Type: application/json" \\
   -d '{"name":"page_view","properties":{"path":"/dashboard","source":"docs"}}'`;
 
+const IDEMPOTENCY_CURL = `curl -X POST ${INGEST_ENDPOINT} \\
+  -H "Authorization: Bearer <API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: checkout-completed-order-4821" \\
+  -d '{"name":"checkout.completed","properties":{"orderId":"4821"}}'`;
+
 const EVENT_NAME_EXAMPLES = [
   "page_view",
   "button_clicked",
@@ -46,6 +52,12 @@ const ERROR_RESPONSES: { code: string; label: string; detail: string }[] = [
     label: "Revoked key or archived project",
     detail:
       "The API key was revoked, or its project is archived so ingestion is paused.",
+  },
+  {
+    code: "429",
+    label: "Rate limit exceeded",
+    detail:
+      "Local limit: 100 events per minute per API key. The event is not stored — wait and retry.",
   },
 ];
 
@@ -129,6 +141,49 @@ export function DocsOverview() {
           <span className="font-bold text-slate-400">properties</span> is
           optional and must be a plain JSON object.
         </p>
+        <p className="mt-3 text-xs text-slate-500">
+          Local limit: 100 events per minute per API key. Requests over the
+          limit receive a 429 and are not stored.
+        </p>
+      </GlowCard>
+
+      {/* Idempotency */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-amber-400/25 bg-amber-500/10 text-amber-300">
+              <Icon name="shield" className="size-5" />
+            </div>
+            <h2 className="text-lg font-black text-white">Idempotency</h2>
+          </div>
+          <button
+            className="rounded-lg border border-slate-700/80 bg-slate-950/50 px-3 py-1.5 text-xs font-black text-cyan-300 transition hover:border-cyan-300/35"
+            onClick={() => copy("idempotency-curl", IDEMPOTENCY_CURL)}
+            type="button"
+          >
+            {copied === "idempotency-curl" ? "Copied!" : "Copy curl"}
+          </button>
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-slate-300">
+          To safely retry a request without creating a duplicate event, send
+          an{" "}
+          <code className="rounded border border-slate-700/70 bg-slate-950/60 px-1.5 py-0.5 font-mono text-xs text-cyan-100">
+            Idempotency-Key
+          </code>{" "}
+          header. It is scoped per API key — reusing the same key with the
+          same API key returns the original event instead of inserting a new
+          one.
+        </p>
+        <pre className="mt-4 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-slate-300">
+          {IDEMPOTENCY_CURL}
+        </pre>
+        <p className="mt-2 text-xs text-slate-500">
+          On the first request the response includes{" "}
+          <span className="font-bold text-slate-400">duplicate: false</span>.
+          Repeating the same key returns{" "}
+          <span className="font-bold text-slate-400">duplicate: true</span>{" "}
+          with the original event and does not evaluate alerts again.
+        </p>
       </GlowCard>
 
       {/* Curl example */}
@@ -189,6 +244,10 @@ export function DocsOverview() {
             </code>
           ))}
         </div>
+        <p className="mt-4 text-xs text-slate-500">
+          EventPulse records basic request metadata like user-agent and IP
+          for debugging.
+        </p>
       </GlowCard>
 
       {/* Error responses */}

@@ -10,6 +10,8 @@ export interface EventRecord {
   projectDomain?: string;
   apiKeyName?: string;
   keyPrefix?: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
 }
 
 export interface EventSummary {

@@ -5,6 +5,7 @@ import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
 import { evaluateAlertsForEvent } from "../utils/alertEvaluation";
 import { hashApiKey } from "../utils/apiKey";
+import { checkRateLimit } from "../utils/rateLimit";
 import { rangeToInterval } from "../utils/timeRange";
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,8 @@ interface EventRow {
   projectId: string;
   apiKeyId: string;
   createdAt: Date;
+  ipAddress?: string | null;
+  userAgent?: string | null;
   // joined fields from project / apiKey
   projectName?: string;
   projectDomain?: string;
@@ -43,6 +46,7 @@ const MAX_EVENT_NAME_LENGTH = 120;
 // Serialized properties cap — a simple in-controller guard (Express also caps
 // the whole body at its default 100kb). No extra libraries required.
 const MAX_PROPERTIES_BYTES = 16 * 1024;
+const MAX_IDEMPOTENCY_KEY_LENGTH = 200;
 // Reject control characters (newlines, tabs, null, etc.) in event names while
 // still allowing names like page_view, checkout.completed, user-signup.
 function hasControlChars(value: string): boolean {
@@ -116,11 +120,23 @@ export async function ingestEventController(req: Request, res: Response) {
       });
     }
 
-    // 3. Validate body
-    const { name, properties } = req.body as {
-      name: unknown;
-      properties: unknown;
-    };
+    // 3. Rate limit — per API key, in-memory. Rejected requests are not
+    // stored and do not touch lastUsedAt or alert evaluation.
+    const rateLimit = checkRateLimit(apiKeyRow.id);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: "Rate limit exceeded. Try again later.",
+      });
+    }
+
+    // 4. Validate body
+    const { name, properties, idempotencyKey: bodyIdempotencyKey } =
+      req.body as {
+        name: unknown;
+        properties: unknown;
+        idempotencyKey?: unknown;
+      };
 
     if (typeof name !== "string") {
       return res.status(400).json({
@@ -169,7 +185,50 @@ export async function ingestEventController(req: Request, res: Response) {
         ? (properties as Record<string, unknown>)
         : {};
 
-    // 4. Insert event
+    // 5. Resolve idempotency key — header takes precedence over body field.
+    const headerIdempotencyKey = req.headers["idempotency-key"];
+    const rawIdempotencyKey =
+      typeof headerIdempotencyKey === "string"
+        ? headerIdempotencyKey
+        : typeof bodyIdempotencyKey === "string"
+          ? bodyIdempotencyKey
+          : undefined;
+    const idempotencyKey = rawIdempotencyKey?.trim() || undefined;
+
+    if (idempotencyKey && idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `Idempotency-Key must not exceed ${MAX_IDEMPOTENCY_KEY_LENGTH} characters`,
+      });
+    }
+
+    // 6. If this API key already used this idempotency key, return the
+    // original event instead of creating a duplicate.
+    if (idempotencyKey) {
+      const [existing] = await prisma.$queryRaw<
+        Pick<EventRow, "id" | "name" | "projectId" | "createdAt">[]
+      >`
+        SELECT id, name, "projectId", "createdAt"
+        FROM "Event"
+        WHERE "apiKeyId" = ${apiKeyRow.id} AND "idempotencyKey" = ${idempotencyKey}
+        LIMIT 1
+      `;
+
+      if (existing) {
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          event: {
+            id: existing.id,
+            name: existing.name,
+            projectId: existing.projectId,
+            createdAt: existing.createdAt,
+          },
+        });
+      }
+    }
+
+    // 7. Insert event
     const eventId = crypto.randomUUID();
     const propertiesJson = JSON.stringify(safeProperties);
 
@@ -182,27 +241,70 @@ export async function ingestEventController(req: Request, res: Response) {
       });
     }
 
-    await prisma.$executeRaw`
-      INSERT INTO "Event" (id, name, properties, "userId", "projectId", "apiKeyId", "createdAt")
-      VALUES (
-        ${eventId},
-        ${eventName},
-        ${propertiesJson}::jsonb,
-        ${apiKeyRow.userId},
-        ${apiKeyRow.projectId},
-        ${apiKeyRow.id},
-        NOW()
-      )
-    `;
+    const ipAddress = req.ip ?? req.socket.remoteAddress ?? null;
+    const userAgentHeader = req.headers["user-agent"];
+    const userAgent = typeof userAgentHeader === "string" ? userAgentHeader : null;
 
-    // 5. Update lastUsedAt on the API key
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO "Event" (id, name, properties, "userId", "projectId", "apiKeyId", "createdAt", "idempotencyKey", "ipAddress", "userAgent")
+        VALUES (
+          ${eventId},
+          ${eventName},
+          ${propertiesJson}::jsonb,
+          ${apiKeyRow.userId},
+          ${apiKeyRow.projectId},
+          ${apiKeyRow.id},
+          NOW(),
+          ${idempotencyKey ?? null},
+          ${ipAddress},
+          ${userAgent}
+        )
+      `;
+    } catch (error) {
+      // Unique violation on (apiKeyId, idempotencyKey) means a concurrent
+      // request already inserted the same idempotency key — treat as a
+      // duplicate rather than a failure.
+      const meta = error instanceof Prisma.PrismaClientKnownRequestError ? error.meta : undefined;
+      const isUniqueViolation =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2010" &&
+        typeof meta?.code === "string" &&
+        meta.code === "23505";
+
+      if (idempotencyKey && isUniqueViolation) {
+        const [existing] = await prisma.$queryRaw<
+          Pick<EventRow, "id" | "name" | "projectId" | "createdAt">[]
+        >`
+          SELECT id, name, "projectId", "createdAt"
+          FROM "Event"
+          WHERE "apiKeyId" = ${apiKeyRow.id} AND "idempotencyKey" = ${idempotencyKey}
+          LIMIT 1
+        `;
+        if (existing) {
+          return res.status(200).json({
+            success: true,
+            duplicate: true,
+            event: {
+              id: existing.id,
+              name: existing.name,
+              projectId: existing.projectId,
+              createdAt: existing.createdAt,
+            },
+          });
+        }
+      }
+      throw error;
+    }
+
+    // 8. Update lastUsedAt on the API key
     await prisma.$executeRaw`
       UPDATE "ApiKey"
       SET "lastUsedAt" = NOW(), "updatedAt" = NOW()
       WHERE id = ${apiKeyRow.id}
     `;
 
-    // 6. Evaluate active alerts for this project/event. Best-effort and
+    // 9. Evaluate active alerts for this project/event. Best-effort and
     // never throws — a failure here cannot turn a stored event into a
     // failed ingestion request.
     await evaluateAlertsForEvent({
@@ -211,7 +313,7 @@ export async function ingestEventController(req: Request, res: Response) {
       eventName,
     });
 
-    // 7. Return minimal event confirmation
+    // 10. Return minimal event confirmation
     const [createdEvent] = await prisma.$queryRaw<
       Pick<EventRow, "id" | "name" | "projectId" | "createdAt">[]
     >`
@@ -222,6 +324,7 @@ export async function ingestEventController(req: Request, res: Response) {
 
     return res.status(201).json({
       success: true,
+      duplicate: false,
       event: {
         id: createdEvent.id,
         name: createdEvent.name,
@@ -278,6 +381,7 @@ export async function getEventsController(req: AuthRequest, res: Response) {
     const events = await prisma.$queryRaw<EventRow[]>`
       SELECT
         e.id, e.name, e.properties, e."userId", e."projectId", e."apiKeyId", e."createdAt",
+        e."ipAddress", e."userAgent",
         p.name AS "projectName", p.domain AS "projectDomain",
         a.name AS "apiKeyName", a."keyPrefix"
       FROM "Event" e

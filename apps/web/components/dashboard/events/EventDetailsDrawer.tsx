@@ -55,6 +55,8 @@ export function EventDetailsDrawer({
     ["API Key", event.apiKeyName ?? "—"],
     ["Key Prefix", event.keyPrefix ?? "—"],
     ["Received", formatDate(event.createdAt)],
+    ["IP Address", event.ipAddress ?? "—"],
+    ["User Agent", event.userAgent ?? "—"],
   ];
 
   const propertiesJson = JSON.stringify(event.properties, null, 2);

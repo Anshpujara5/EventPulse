@@ -54,19 +54,27 @@ model ApiKey {
 }
 
 model Event {
-  id         String   @id @default(cuid())
-  name       String
-  properties Json     @default("{}")
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  apiKeyId   String
-  apiKey     ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String
+  properties     Json     @default("{}")
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  apiKeyId       String
+  apiKey         ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  // Client-supplied idempotency key (Idempotency-Key header or body field).
+  // Null when the caller didn't send one — no dedup applied in that case.
+  idempotencyKey String?
+  ipAddress      String?
+  userAgent      String?
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([projectId, createdAt(sort: Desc)])
+  // Enforces per-API-key idempotency at the DB level (NULLs don't collide,
+  // so events without an idempotency key are unaffected).
+  @@unique([apiKeyId, idempotencyKey])
 }
 
 model Alert {
