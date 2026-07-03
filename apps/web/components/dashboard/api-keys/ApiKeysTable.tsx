@@ -104,10 +104,10 @@ export function ApiKeysTable({
             }`}
             key={apiKey.id}
           >
-            <p className="truncate font-black text-white" title={apiKey.name}>
+            <p className="min-w-0 truncate font-black text-white" title={apiKey.name}>
               {apiKey.name}
             </p>
-            <p className="truncate text-slate-400" title={apiKey.project.name}>
+            <p className="min-w-0 truncate text-slate-400" title={apiKey.project.name}>
               {apiKey.project.name}
             </p>
             <p className="flex min-w-0 items-center gap-2 font-mono text-xs text-slate-300">
@@ -116,7 +116,7 @@ export function ApiKeysTable({
               </span>
               <Icon name="document" className="size-4 shrink-0 text-slate-500" />
             </p>
-            <p className="truncate text-slate-300" title={apiKey.permissions}>
+            <p className="min-w-0 truncate text-slate-300" title={apiKey.permissions}>
               {apiKey.permissions}
             </p>
             <div>

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
@@ -48,6 +49,19 @@ export async function getAnalyticsSummaryController(
 
     const userId = req.user.userId;
 
+    // Optional project scope from the header project selector. Uses parameterised
+    // Prisma SQL fragments (never string concatenation) so it stays injection-safe.
+    const projectId =
+      typeof req.query.projectId === "string" && req.query.projectId
+        ? req.query.projectId
+        : null;
+    const projFilter = projectId
+      ? Prisma.sql`AND "projectId" = ${projectId}`
+      : Prisma.empty;
+    const projFilterE = projectId
+      ? Prisma.sql`AND e."projectId" = ${projectId}`
+      : Prisma.empty;
+
     const [
       totalResult,
       todayResult,
@@ -63,6 +77,7 @@ export async function getAnalyticsSummaryController(
         SELECT COUNT(*) AS count
         FROM "Event"
         WHERE "userId" = ${userId}
+        ${projFilter}
       `,
 
       // Events today (since midnight UTC)
@@ -71,6 +86,7 @@ export async function getAnalyticsSummaryController(
         FROM "Event"
         WHERE "userId" = ${userId}
           AND "createdAt" >= CURRENT_DATE
+        ${projFilter}
       `,
 
       // Events in the last 24 hours
@@ -79,6 +95,7 @@ export async function getAnalyticsSummaryController(
         FROM "Event"
         WHERE "userId" = ${userId}
           AND "createdAt" >= NOW() - INTERVAL '24 hours'
+        ${projFilter}
       `,
 
       // Number of distinct projects that have received events
@@ -86,6 +103,7 @@ export async function getAnalyticsSummaryController(
         SELECT COUNT(DISTINCT "projectId") AS count
         FROM "Event"
         WHERE "userId" = ${userId}
+        ${projFilter}
       `,
 
       // Top 10 event names by count
@@ -93,6 +111,7 @@ export async function getAnalyticsSummaryController(
         SELECT name, COUNT(*) AS count
         FROM "Event"
         WHERE "userId" = ${userId}
+        ${projFilter}
         GROUP BY name
         ORDER BY count DESC
         LIMIT 10
@@ -104,6 +123,7 @@ export async function getAnalyticsSummaryController(
         FROM "Event" e
         JOIN "Project" p ON p.id = e."projectId"
         WHERE e."userId" = ${userId}
+        ${projFilterE}
         GROUP BY e."projectId", p.name
         ORDER BY count DESC
         LIMIT 10
@@ -120,6 +140,7 @@ export async function getAnalyticsSummaryController(
         FROM "Event"
         WHERE "userId" = ${userId}
           AND "createdAt" >= NOW() - INTERVAL '24 hours'
+        ${projFilter}
         GROUP BY DATE_TRUNC('hour', "createdAt" AT TIME ZONE 'UTC')
         ORDER BY hour ASC
       `,
@@ -130,6 +151,7 @@ export async function getAnalyticsSummaryController(
         FROM "Event" e
         JOIN "Project" p ON p.id = e."projectId"
         WHERE e."userId" = ${userId}
+        ${projFilterE}
         ORDER BY e."createdAt" DESC
         LIMIT 10
       `,

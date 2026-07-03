@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ALL_PROJECTS_ID,
+  useDashboardHeaderState,
+} from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import type { AnalyticsData } from "./analytics-types";
 import { AnalyticsEmptyState } from "./AnalyticsEmptyState";
 import { AnalyticsMetricCards } from "./AnalyticsMetricCards";
@@ -19,9 +23,10 @@ type FetchState =
   | { status: "success"; data: AnalyticsData };
 
 export function AnalyticsOverview() {
+  const { selectedProjectId } = useDashboardHeaderState();
   const [state, setState] = useState<FetchState>({ status: "loading" });
 
-  async function fetchAnalytics() {
+  const fetchAnalytics = useCallback(async () => {
     setState({ status: "loading" });
     try {
       const token =
@@ -29,9 +34,19 @@ export function AnalyticsOverview() {
           ? localStorage.getItem("eventpulse_token")
           : null;
 
-      const res = await fetch(`${API_BASE}/api/analytics/summary`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
+      const params = new URLSearchParams();
+      // Scope analytics to the globally selected project from the header.
+      if (selectedProjectId && selectedProjectId !== ALL_PROJECTS_ID) {
+        params.set("projectId", selectedProjectId);
+      }
+      const query = params.toString();
+
+      const res = await fetch(
+        `${API_BASE}/api/analytics/summary${query ? `?${query}` : ""}`,
+        {
+          headers: { Authorization: `Bearer ${token ?? ""}` },
+        },
+      );
 
       if (!res.ok) {
         const body = (await res.json()) as { message?: string };
@@ -50,11 +65,11 @@ export function AnalyticsOverview() {
     } catch {
       setState({ status: "error", message: "Could not reach server" });
     }
-  }
+  }, [selectedProjectId]);
 
   useEffect(() => {
     void fetchAnalytics();
-  }, []);
+  }, [fetchAnalytics]);
 
   const isEmpty =
     state.status === "success" && state.data.summary.totalEvents === 0;

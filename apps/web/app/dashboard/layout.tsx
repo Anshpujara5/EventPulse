@@ -1,6 +1,7 @@
 "use client";
 
 import { DashboardHeader } from "@/components/dashboard/layout/DashboardHeader";
+import { DashboardHeaderProvider } from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import { DashboardSidebar } from "@/components/dashboard/layout/DashboardSidebar";
 import { apiRequest } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -75,14 +76,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen bg-[#020814] text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(14,165,233,0.16),transparent_30%),radial-gradient(circle_at_82%_14%,rgba(124,58,237,0.16),transparent_28%)]" />
-      <div className="relative grid min-h-screen lg:grid-cols-[240px_1fr]">
-        <DashboardSidebar />
+      <DashboardHeaderProvider>
+        <div className="relative grid min-h-screen lg:grid-cols-[240px_1fr]">
+          <DashboardSidebar />
 
-        <section className="min-w-0">
-          <DashboardHeader userEmail={user?.email} userName={user?.name} />
-          {children}
-        </section>
-      </div>
+          <section className="min-w-0">
+            <DashboardHeader userEmail={user?.email} userName={user?.name} />
+            {children}
+          </section>
+        </div>
+      </DashboardHeaderProvider>
     </main>
   );
 }

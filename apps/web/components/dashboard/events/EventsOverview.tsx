@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ALL_PROJECTS_ID,
+  useDashboardHeaderState,
+} from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import type { EventRecord, EventSummary } from "./event-types";
+import { EventDetailsDrawer } from "./EventDetailsDrawer";
 import { EventsEmptyState } from "./EventsEmptyState";
 import { EventsMetricCards } from "./EventsMetricCards";
 import { EventsSearchBar } from "./EventsSearchBar";
 import { EventsTable } from "./EventsTable";
-import { SelectedEventPanel } from "./SelectedEventPanel";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
@@ -21,61 +25,64 @@ type FetchState =
     };
 
 export function EventsOverview() {
+  const { selectedProjectId } = useDashboardHeaderState();
   const [state, setState] = useState<FetchState>({ status: "loading" });
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<EventRecord | null>(null);
 
-  async function fetchEvents(nameFilter?: string) {
-    setState({ status: "loading" });
-    try {
-      const token =
-        typeof window !== "undefined"
-          ? localStorage.getItem("eventpulse_token")
-          : null;
+  const fetchEvents = useCallback(
+    async (nameFilter?: string) => {
+      setState({ status: "loading" });
+      try {
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem("eventpulse_token")
+            : null;
 
-      const params = new URLSearchParams({ limit: "50" });
-      if (nameFilter) params.set("name", nameFilter);
+        const params = new URLSearchParams({ limit: "50" });
+        if (nameFilter) params.set("name", nameFilter);
+        // Scope to the globally selected project from the header, if any.
+        if (selectedProjectId && selectedProjectId !== ALL_PROJECTS_ID) {
+          params.set("projectId", selectedProjectId);
+        }
 
-      const res = await fetch(`${API_BASE}/api/events?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
-
-      if (!res.ok) {
-        const body = (await res.json()) as { message?: string };
-        setState({
-          status: "error",
-          message: body.message ?? "Failed to load events",
+        const res = await fetch(`${API_BASE}/api/events?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token ?? ""}` },
         });
-        return;
+
+        if (!res.ok) {
+          const body = (await res.json()) as { message?: string };
+          setState({
+            status: "error",
+            message: body.message ?? "Failed to load events",
+          });
+          return;
+        }
+
+        const body = (await res.json()) as {
+          success: boolean;
+          data: { events: EventRecord[]; summary: EventSummary };
+        };
+        setState({
+          status: "success",
+          events: body.data.events,
+          summary: body.data.summary,
+        });
+        setSelected(null);
+      } catch {
+        setState({ status: "error", message: "Could not reach server" });
       }
+    },
+    [selectedProjectId],
+  );
 
-      const body = (await res.json()) as {
-        success: boolean;
-        data: { events: EventRecord[]; summary: EventSummary };
-      };
-      setState({
-        status: "success",
-        events: body.data.events,
-        summary: body.data.summary,
-      });
-      setSelected(null);
-    } catch {
-      setState({ status: "error", message: "Could not reach server" });
-    }
-  }
-
-  useEffect(() => {
-    void fetchEvents();
-  }, []);
-
-  // Debounce search
+  // Debounce search; also refetches when the header project scope changes.
   useEffect(() => {
     const t = setTimeout(() => {
       void fetchEvents(search.trim() || undefined);
-    }, 350);
+    }, 300);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, fetchEvents]);
 
   const isEmpty =
     state.status === "success" && state.events.length === 0 && !search;
@@ -141,17 +148,18 @@ export function EventsOverview() {
       {/* Empty — no events ingested yet */}
       {isEmpty && <EventsEmptyState />}
 
-      {/* Events table + detail panel */}
+      {/* Events table — full width; details open in a drawer on click */}
       {state.status === "success" && state.events.length > 0 && (
-        <section className="mt-4 grid gap-4 xl:grid-cols-[1.5fr_0.9fr]">
+        <section className="mt-4">
           <EventsTable
             events={state.events}
             selected={selected}
             onSelect={setSelected}
           />
-          <SelectedEventPanel event={selected} />
         </section>
       )}
+
+      <EventDetailsDrawer event={selected} onClose={() => setSelected(null)} />
 
       {/* Search returned nothing */}
       {state.status === "success" &&

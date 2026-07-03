@@ -1,10 +1,33 @@
 "use client";
 
+import { FilterDropdown } from "@/components/common/FilterDropdown";
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
 import { apiRequest } from "@/lib/api";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ProjectCard, type Project } from "./ProjectCard";
+
+type StatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
+type SortOption =
+  | "updated"
+  | "created"
+  | "name-asc"
+  | "name-desc"
+  | "status";
+
+const STATUS_OPTIONS = [
+  { value: "ALL", label: "All" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "INACTIVE", label: "Inactive" },
+];
+
+const SORT_OPTIONS = [
+  { value: "updated", label: "Last Activity" },
+  { value: "created", label: "Created Date" },
+  { value: "name-asc", label: "Name A–Z" },
+  { value: "name-desc", label: "Name Z–A" },
+  { value: "status", label: "Status" },
+];
 
 type ProjectsResponse = {
   success: boolean;
@@ -54,6 +77,8 @@ export function ProjectsOverview() {
   const [isLoading, setIsLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [sortBy, setSortBy] = useState<SortOption>("updated");
 
   async function fetchProjects() {
     const token = localStorage.getItem("eventpulse_token");
@@ -90,16 +115,42 @@ export function ProjectsOverview() {
   const filteredProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    if (!query) {
-      return projects;
-    }
+    const matched = projects.filter((project) => {
+      const matchesSearch =
+        !query ||
+        [project.name, project.domain, project.description ?? ""].some((value) =>
+          value.toLowerCase().includes(query),
+        );
+      const matchesStatus =
+        statusFilter === "ALL" || project.status === statusFilter;
 
-    return projects.filter((project) =>
-      [project.name, project.domain, project.description ?? ""].some((value) =>
-        value.toLowerCase().includes(query),
-      ),
-    );
-  }, [projects, searchQuery]);
+      return matchesSearch && matchesStatus;
+    });
+
+    const sorted = [...matched];
+
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "status":
+          return a.status.localeCompare(b.status);
+        case "created":
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        case "updated":
+        default:
+          return (
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+      }
+    });
+
+    return sorted;
+  }, [projects, searchQuery, statusFilter, sortBy]);
 
   const activeProjects = projects.filter((project) => project.status === "ACTIVE").length;
   const inactiveProjects = projects.filter((project) => project.status === "INACTIVE").length;
@@ -196,14 +247,6 @@ export function ProjectsOverview() {
             Manage apps and products that send events to EventPulse.
           </p>
         </div>
-        <button
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
-          onClick={openCreateForm}
-          type="button"
-        >
-          <span className="text-xl leading-none">+</span>
-          Create Project
-        </button>
       </div>
 
       <section className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -217,20 +260,24 @@ export function ProjectsOverview() {
           />
         </div>
         <div className="flex flex-wrap gap-3">
-          <button
-            className="flex h-12 items-center gap-3 rounded-xl border border-slate-700/80 bg-slate-950/60 px-4 text-sm font-bold text-slate-300"
-            type="button"
-          >
-            Status: All
-            <span className="text-slate-500">⌄</span>
-          </button>
-          <button
-            className="flex h-12 items-center gap-3 rounded-xl border border-slate-700/80 bg-slate-950/60 px-4 text-sm font-bold text-slate-300"
-            type="button"
-          >
-            Sort by: Last Activity
-            <span className="text-slate-500">⌄</span>
-          </button>
+          <FilterDropdown
+            ariaLabel="Filter projects by status"
+            icon="pulse"
+            onChange={(value) => setStatusFilter(value as StatusFilter)}
+            options={STATUS_OPTIONS}
+            prefix="Status: "
+            value={statusFilter}
+            widthClassName="min-w-[180px]"
+          />
+          <FilterDropdown
+            ariaLabel="Sort projects"
+            icon="list"
+            onChange={(value) => setSortBy(value as SortOption)}
+            options={SORT_OPTIONS}
+            prefix="Sort by: "
+            value={sortBy}
+            widthClassName="min-w-[210px]"
+          />
         </div>
       </section>
 

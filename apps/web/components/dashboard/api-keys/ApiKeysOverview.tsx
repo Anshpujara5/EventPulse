@@ -8,6 +8,11 @@ import {
   useState,
 } from "react";
 import { apiRequest } from "@/lib/api";
+import type { FilterOption } from "@/components/common/FilterDropdown";
+import {
+  ALL_PROJECTS_ID,
+  useDashboardHeaderState,
+} from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import { ApiKeyDetailsPanel } from "./ApiKeyDetailsPanel";
 import {
   ApiKeyMetricCard,
@@ -84,11 +89,20 @@ function buildMetrics(apiKeys: ApiKey[]): ApiKeyMetric[] {
   ];
 }
 
+const STATUS_OPTIONS: FilterOption[] = [
+  { value: "all", label: "All Statuses" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "REVOKED", label: "Revoked" },
+];
+
 export function ApiKeysOverview() {
+  const { selectedProjectId } = useDashboardHeaderState();
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedApiKeyId, setSelectedApiKeyId] = useState<string>();
   const [searchQuery, setSearchQuery] = useState("");
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -148,28 +162,63 @@ export function ApiKeysOverview() {
     void loadData();
   }, [loadData]);
 
-  const filteredApiKeys = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    if (!query) {
+  // The header project selector is the global scope; the page's own project
+  // filter narrows further within that scope.
+  const scopedApiKeys = useMemo(() => {
+    if (!selectedProjectId || selectedProjectId === ALL_PROJECTS_ID) {
       return apiKeys;
     }
 
-    return apiKeys.filter((apiKey) =>
-      [
-        apiKey.name,
-        apiKey.project.name,
-        apiKey.project.domain,
-        apiKey.maskedKey,
-        apiKey.permissions,
-        apiKey.status,
-      ].some((value) => value.toLowerCase().includes(query)),
-    );
-  }, [apiKeys, searchQuery]);
+    return apiKeys.filter((apiKey) => apiKey.project.id === selectedProjectId);
+  }, [apiKeys, selectedProjectId]);
 
-  const metrics = useMemo(() => buildMetrics(apiKeys), [apiKeys]);
+  const projectOptions = useMemo<FilterOption[]>(() => {
+    const seen = new Map<string, string>();
+    scopedApiKeys.forEach((apiKey) => {
+      seen.set(apiKey.project.id, apiKey.project.name);
+    });
+
+    return [
+      { value: "all", label: "All Projects" },
+      ...[...seen].map(([value, label]) => ({ value, label })),
+    ];
+  }, [scopedApiKeys]);
+
+  // Fall back to "all" if the chosen project left the current header scope.
+  const activeProjectFilter = projectOptions.some(
+    (option) => option.value === projectFilter,
+  )
+    ? projectFilter
+    : "all";
+
+  const filteredApiKeys = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return scopedApiKeys.filter((apiKey) => {
+      const matchesProject =
+        activeProjectFilter === "all" ||
+        apiKey.project.id === activeProjectFilter;
+      const matchesStatus =
+        statusFilter === "all" || apiKey.status === statusFilter;
+      const matchesSearch =
+        !query ||
+        [
+          apiKey.name,
+          apiKey.project.name,
+          apiKey.project.domain,
+          apiKey.maskedKey,
+          apiKey.permissions,
+          apiKey.status,
+        ].some((value) => value.toLowerCase().includes(query));
+
+      return matchesProject && matchesStatus && matchesSearch;
+    });
+  }, [scopedApiKeys, searchQuery, activeProjectFilter, statusFilter]);
+
+  const metrics = useMemo(() => buildMetrics(scopedApiKeys), [scopedApiKeys]);
   const selectedApiKey =
-    apiKeys.find((apiKey) => apiKey.id === selectedApiKeyId) ?? apiKeys[0];
+    filteredApiKeys.find((apiKey) => apiKey.id === selectedApiKeyId) ??
+    filteredApiKeys[0];
 
   const handleOpenCreate = () => {
     setCreateError("");
@@ -275,9 +324,14 @@ export function ApiKeysOverview() {
       </div>
 
       <ApiKeysFilterBar
-        onCreateClick={handleOpenCreate}
+        onProjectChange={setProjectFilter}
         onSearchChange={setSearchQuery}
+        onStatusChange={setStatusFilter}
+        projectFilter={activeProjectFilter}
+        projectOptions={projectOptions}
         searchQuery={searchQuery}
+        statusFilter={statusFilter}
+        statusOptions={STATUS_OPTIONS}
       />
 
       <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -286,8 +340,8 @@ export function ApiKeysOverview() {
         ))}
       </section>
 
-      <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_340px]">
-        <div className="grid gap-4">
+      <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid min-w-0 gap-4">
           {newApiKey ? (
             <section className="rounded-2xl border border-cyan-400/30 bg-cyan-500/8 p-5 shadow-[0_0_28px_rgba(34,211,238,0.12)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -371,7 +425,7 @@ export function ApiKeysOverview() {
           </section>
         </div>
 
-        <aside className="grid gap-4">
+        <aside className="grid min-w-0 gap-4">
           <SecurityBestPracticesCard />
           <ApiKeyDetailsPanel
             apiKey={selectedApiKey}
