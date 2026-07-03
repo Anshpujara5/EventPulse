@@ -1,8 +1,9 @@
 "use client";
 
 import { Icon } from "@/components/common/Icon";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { getInitials } from "./header-utils";
 
 export function AccountAvatarMenu({
@@ -19,19 +20,7 @@ export function AccountAvatarMenu({
   const displayName = userName?.trim() || "User";
   const displayEmail = userEmail || "No email available";
 
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (!dropdownRef.current?.contains(event.target as Node)) {
-        setIsAccountOpen(false);
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, []);
+  useOutsideClick(dropdownRef, () => setIsAccountOpen(false), isAccountOpen);
 
   function handleSignOut() {
     localStorage.removeItem("eventpulse_token");

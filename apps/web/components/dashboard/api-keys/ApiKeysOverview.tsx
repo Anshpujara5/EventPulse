@@ -96,11 +96,11 @@ const STATUS_OPTIONS: FilterOption[] = [
 ];
 
 export function ApiKeysOverview() {
-  const { selectedProjectId } = useDashboardHeaderState();
+  const { selectedProjectId, searchQuery, setSearchQuery } =
+    useDashboardHeaderState();
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedApiKeyId, setSelectedApiKeyId] = useState<string>();
-  const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);

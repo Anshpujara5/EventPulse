@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
+import { rangeToInterval } from "../utils/timeRange";
 
 // ---------------------------------------------------------------------------
 // Row types for typed raw queries
@@ -62,6 +63,17 @@ export async function getAnalyticsSummaryController(
       ? Prisma.sql`AND e."projectId" = ${projectId}`
       : Prisma.empty;
 
+    // Optional time-range scope from the header time-range selector. It scopes
+    // the analytical breakdowns (top events, per-project, recent activity). The
+    // fixed-window summary cards (today / rolling 24h) keep their own semantics.
+    const rangeInterval = rangeToInterval(req.query.range);
+    const rangeFilter = rangeInterval
+      ? Prisma.sql`AND "createdAt" >= NOW() - ${rangeInterval}::interval`
+      : Prisma.empty;
+    const rangeFilterE = rangeInterval
+      ? Prisma.sql`AND e."createdAt" >= NOW() - ${rangeInterval}::interval`
+      : Prisma.empty;
+
     const [
       totalResult,
       todayResult,
@@ -106,24 +118,26 @@ export async function getAnalyticsSummaryController(
         ${projFilter}
       `,
 
-      // Top 10 event names by count
+      // Top 10 event names by count (scoped to the selected time range)
       prisma.$queryRaw<TopEventRow[]>`
         SELECT name, COUNT(*) AS count
         FROM "Event"
         WHERE "userId" = ${userId}
         ${projFilter}
+        ${rangeFilter}
         GROUP BY name
         ORDER BY count DESC
         LIMIT 10
       `,
 
-      // Event counts per project (join to get name)
+      // Event counts per project (join to get name; scoped to the time range)
       prisma.$queryRaw<ProjectEventRow[]>`
         SELECT e."projectId", p.name AS "projectName", COUNT(*) AS count
         FROM "Event" e
         JOIN "Project" p ON p.id = e."projectId"
         WHERE e."userId" = ${userId}
         ${projFilterE}
+        ${rangeFilterE}
         GROUP BY e."projectId", p.name
         ORDER BY count DESC
         LIMIT 10
@@ -145,13 +159,14 @@ export async function getAnalyticsSummaryController(
         ORDER BY hour ASC
       `,
 
-      // 10 most recent events with project name
+      // 10 most recent events with project name (scoped to the time range)
       prisma.$queryRaw<RecentEventRow[]>`
         SELECT e.id, e.name, p.name AS "projectName", e."createdAt"
         FROM "Event" e
         JOIN "Project" p ON p.id = e."projectId"
         WHERE e."userId" = ${userId}
         ${projFilterE}
+        ${rangeFilterE}
         ORDER BY e."createdAt" DESC
         LIMIT 10
       `,

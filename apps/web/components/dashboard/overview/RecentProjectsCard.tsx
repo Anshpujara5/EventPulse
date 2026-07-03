@@ -15,8 +15,10 @@ function timeAgo(iso: string): string {
 
 export function RecentProjectsCard({
   projects,
+  emptyLabel,
 }: {
   projects: DashboardProject[];
+  emptyLabel?: string;
 }) {
   return (
     <GlowCard className="overflow-hidden">
@@ -33,13 +35,17 @@ export function RecentProjectsCard({
       {projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
           <Icon className="size-8 text-slate-600" name="folder" />
-          <p className="text-sm text-slate-500">No projects yet.</p>
-          <a
-            className="mt-1 text-sm font-bold text-cyan-400 hover:text-cyan-300"
-            href="/dashboard/projects"
-          >
-            Create your first project →
-          </a>
+          <p className="text-sm text-slate-500">
+            {emptyLabel ?? "No projects yet."}
+          </p>
+          {emptyLabel ? null : (
+            <a
+              className="mt-1 text-sm font-bold text-cyan-400 hover:text-cyan-300"
+              href="/dashboard/projects"
+            >
+              Create your first project →
+            </a>
+          )}
         </div>
       ) : (
         <div className="divide-y divide-slate-800">

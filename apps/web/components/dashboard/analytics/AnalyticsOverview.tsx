@@ -23,7 +23,7 @@ type FetchState =
   | { status: "success"; data: AnalyticsData };
 
 export function AnalyticsOverview() {
-  const { selectedProjectId } = useDashboardHeaderState();
+  const { selectedProjectId, timeRange } = useDashboardHeaderState();
   const [state, setState] = useState<FetchState>({ status: "loading" });
 
   const fetchAnalytics = useCallback(async () => {
@@ -38,6 +38,10 @@ export function AnalyticsOverview() {
       // Scope analytics to the globally selected project from the header.
       if (selectedProjectId && selectedProjectId !== ALL_PROJECTS_ID) {
         params.set("projectId", selectedProjectId);
+      }
+      // Scope the analytical breakdowns to the header time range.
+      if (timeRange && timeRange !== "all") {
+        params.set("range", timeRange);
       }
       const query = params.toString();
 
@@ -65,7 +69,7 @@ export function AnalyticsOverview() {
     } catch {
       setState({ status: "error", message: "Could not reach server" });
     }
-  }, [selectedProjectId]);
+  }, [selectedProjectId, timeRange]);
 
   useEffect(() => {
     void fetchAnalytics();

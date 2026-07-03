@@ -18,12 +18,22 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export function ProjectCard({ project }: { project: Project }) {
+export function ProjectCard({
+  project,
+  isSelected = false,
+}: {
+  project: Project;
+  isSelected?: boolean;
+}) {
   const isActive = project.status === "ACTIVE";
   const statusLabel = isActive ? "Active" : "Inactive";
 
   return (
-    <div className="grid gap-4 border-t border-slate-800/80 px-5 py-4 text-sm first:border-t-0 lg:grid-cols-[minmax(220px,2fr)_minmax(0,1.05fr)_112px_minmax(0,0.95fr)_120px_120px_164px] lg:items-center">
+    <div
+      className={`grid gap-4 border-t border-slate-800/80 px-5 py-4 text-sm first:border-t-0 lg:grid-cols-[minmax(220px,2fr)_minmax(0,1.05fr)_112px_minmax(0,0.95fr)_120px_120px_164px] lg:items-center ${
+        isSelected ? "bg-blue-500/8 ring-1 ring-inset ring-blue-400/45" : ""
+      }`}
+    >
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-cyan-400/35 bg-cyan-500/10 text-cyan-400">
           <Icon name="cube" className="size-5" />
@@ -67,8 +77,10 @@ export function ProjectCard({ project }: { project: Project }) {
       <div className="flex items-center gap-2 lg:justify-end">
         {["View", "Settings"].map((action) => (
           <button
-            className="w-19 rounded-lg border border-slate-700/80 bg-slate-950/35 px-3 py-2 text-xs font-bold text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-300"
+            className="w-19 cursor-not-allowed rounded-lg border border-slate-700/70 bg-slate-950/35 px-3 py-2 text-xs font-bold text-slate-600"
+            disabled
             key={action}
+            title="Coming soon"
             type="button"
           >
             {action}

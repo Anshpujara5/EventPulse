@@ -163,13 +163,26 @@ export function ApiKeysTable({
           {apiKeys.length} results
         </span>
         <div className="flex items-center gap-2">
-          <button className="rounded-lg border border-slate-700/80 px-3 py-2 text-slate-500" type="button">
+          <button
+            aria-label="Previous page"
+            className="cursor-not-allowed rounded-lg border border-slate-700/80 px-3 py-2 text-slate-600 opacity-60"
+            disabled
+            type="button"
+          >
             ‹
           </button>
-          <button className="rounded-lg border border-blue-400/40 bg-blue-600/25 px-3 py-2 font-bold text-cyan-300" type="button">
+          <span
+            aria-current="page"
+            className="rounded-lg border border-blue-400/40 bg-blue-600/25 px-3 py-2 font-bold text-cyan-300"
+          >
             1
-          </button>
-          <button className="rounded-lg border border-slate-700/80 px-3 py-2 text-slate-500" type="button">
+          </span>
+          <button
+            aria-label="Next page"
+            className="cursor-not-allowed rounded-lg border border-slate-700/80 px-3 py-2 text-slate-600 opacity-60"
+            disabled
+            type="button"
+          >
             ›
           </button>
         </div>

@@ -1,8 +1,10 @@
+import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import type { Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
 import { hashApiKey } from "../utils/apiKey";
+import { rangeToInterval } from "../utils/timeRange";
 
 // ---------------------------------------------------------------------------
 // Shared types (mirrors Prisma schema — stays correct until prisma generate
@@ -174,76 +176,43 @@ export async function getEventsController(req: AuthRequest, res: Response) {
 
     const userId = req.user.userId;
 
-    // Optional query filters
+    // Optional query filters. All values are bound as parameters via Prisma.sql
+    // fragments (never string concatenation) so the query stays injection-safe.
     const projectId =
       typeof req.query.projectId === "string" ? req.query.projectId : null;
     const eventName =
       typeof req.query.name === "string" ? req.query.name : null;
+    const rangeInterval = rangeToInterval(req.query.range);
     const limitRaw = Number(req.query.limit);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 && limitRaw <= 200
       ? limitRaw
       : 50;
 
-    // Build query — using conditional raw SQL
-    let events: EventRow[];
+    const projFilter = projectId
+      ? Prisma.sql`AND e."projectId" = ${projectId}`
+      : Prisma.empty;
+    const nameFilter = eventName
+      ? Prisma.sql`AND e.name ILIKE ${`%${eventName}%`}`
+      : Prisma.empty;
+    const rangeFilter = rangeInterval
+      ? Prisma.sql`AND e."createdAt" >= NOW() - ${rangeInterval}::interval`
+      : Prisma.empty;
 
-    if (projectId && eventName) {
-      events = await prisma.$queryRaw<EventRow[]>`
-        SELECT
-          e.id, e.name, e.properties, e."userId", e."projectId", e."apiKeyId", e."createdAt",
-          p.name AS "projectName", p.domain AS "projectDomain",
-          a.name AS "apiKeyName", a."keyPrefix"
-        FROM "Event" e
-        JOIN "Project" p ON p.id = e."projectId"
-        JOIN "ApiKey"  a ON a.id = e."apiKeyId"
-        WHERE e."userId" = ${userId}
-          AND e."projectId" = ${projectId}
-          AND e.name ILIKE ${"%" + eventName + "%"}
-        ORDER BY e."createdAt" DESC
-        LIMIT ${limit}
-      `;
-    } else if (projectId) {
-      events = await prisma.$queryRaw<EventRow[]>`
-        SELECT
-          e.id, e.name, e.properties, e."userId", e."projectId", e."apiKeyId", e."createdAt",
-          p.name AS "projectName", p.domain AS "projectDomain",
-          a.name AS "apiKeyName", a."keyPrefix"
-        FROM "Event" e
-        JOIN "Project" p ON p.id = e."projectId"
-        JOIN "ApiKey"  a ON a.id = e."apiKeyId"
-        WHERE e."userId" = ${userId}
-          AND e."projectId" = ${projectId}
-        ORDER BY e."createdAt" DESC
-        LIMIT ${limit}
-      `;
-    } else if (eventName) {
-      events = await prisma.$queryRaw<EventRow[]>`
-        SELECT
-          e.id, e.name, e.properties, e."userId", e."projectId", e."apiKeyId", e."createdAt",
-          p.name AS "projectName", p.domain AS "projectDomain",
-          a.name AS "apiKeyName", a."keyPrefix"
-        FROM "Event" e
-        JOIN "Project" p ON p.id = e."projectId"
-        JOIN "ApiKey"  a ON a.id = e."apiKeyId"
-        WHERE e."userId" = ${userId}
-          AND e.name ILIKE ${"%" + eventName + "%"}
-        ORDER BY e."createdAt" DESC
-        LIMIT ${limit}
-      `;
-    } else {
-      events = await prisma.$queryRaw<EventRow[]>`
-        SELECT
-          e.id, e.name, e.properties, e."userId", e."projectId", e."apiKeyId", e."createdAt",
-          p.name AS "projectName", p.domain AS "projectDomain",
-          a.name AS "apiKeyName", a."keyPrefix"
-        FROM "Event" e
-        JOIN "Project" p ON p.id = e."projectId"
-        JOIN "ApiKey"  a ON a.id = e."apiKeyId"
-        WHERE e."userId" = ${userId}
-        ORDER BY e."createdAt" DESC
-        LIMIT ${limit}
-      `;
-    }
+    const events = await prisma.$queryRaw<EventRow[]>`
+      SELECT
+        e.id, e.name, e.properties, e."userId", e."projectId", e."apiKeyId", e."createdAt",
+        p.name AS "projectName", p.domain AS "projectDomain",
+        a.name AS "apiKeyName", a."keyPrefix"
+      FROM "Event" e
+      JOIN "Project" p ON p.id = e."projectId"
+      JOIN "ApiKey"  a ON a.id = e."apiKeyId"
+      WHERE e."userId" = ${userId}
+      ${projFilter}
+      ${nameFilter}
+      ${rangeFilter}
+      ORDER BY e."createdAt" DESC
+      LIMIT ${limit}
+    `;
 
     // Count totals for summary cards
     const [totals] = await prisma.$queryRaw<

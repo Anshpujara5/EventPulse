@@ -13,7 +13,13 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
-export function RecentApiKeysCard({ apiKeys }: { apiKeys: DashboardApiKey[] }) {
+export function RecentApiKeysCard({
+  apiKeys,
+  emptyLabel,
+}: {
+  apiKeys: DashboardApiKey[];
+  emptyLabel?: string;
+}) {
   return (
     <GlowCard className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
@@ -29,13 +35,17 @@ export function RecentApiKeysCard({ apiKeys }: { apiKeys: DashboardApiKey[] }) {
       {apiKeys.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
           <Icon className="size-8 text-slate-600" name="key" />
-          <p className="text-sm text-slate-500">No API keys yet.</p>
-          <a
-            className="mt-1 text-sm font-bold text-cyan-400 hover:text-cyan-300"
-            href="/dashboard/api-keys"
-          >
-            Create your first API key →
-          </a>
+          <p className="text-sm text-slate-500">
+            {emptyLabel ?? "No API keys yet."}
+          </p>
+          {emptyLabel ? null : (
+            <a
+              className="mt-1 text-sm font-bold text-cyan-400 hover:text-cyan-300"
+              href="/dashboard/api-keys"
+            >
+              Create your first API key →
+            </a>
+          )}
         </div>
       ) : (
         <div className="divide-y divide-slate-800">

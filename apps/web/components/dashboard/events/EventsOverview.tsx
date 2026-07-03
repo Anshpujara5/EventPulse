@@ -25,9 +25,9 @@ type FetchState =
     };
 
 export function EventsOverview() {
-  const { selectedProjectId } = useDashboardHeaderState();
+  const { selectedProjectId, timeRange, searchQuery, setSearchQuery } =
+    useDashboardHeaderState();
   const [state, setState] = useState<FetchState>({ status: "loading" });
-  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<EventRecord | null>(null);
 
   const fetchEvents = useCallback(
@@ -44,6 +44,10 @@ export function EventsOverview() {
         // Scope to the globally selected project from the header, if any.
         if (selectedProjectId && selectedProjectId !== ALL_PROJECTS_ID) {
           params.set("projectId", selectedProjectId);
+        }
+        // Scope to the header time range (backend filters events by createdAt).
+        if (timeRange && timeRange !== "all") {
+          params.set("range", timeRange);
         }
 
         const res = await fetch(`${API_BASE}/api/events?${params.toString()}`, {
@@ -73,19 +77,19 @@ export function EventsOverview() {
         setState({ status: "error", message: "Could not reach server" });
       }
     },
-    [selectedProjectId],
+    [selectedProjectId, timeRange],
   );
 
-  // Debounce search; also refetches when the header project scope changes.
+  // Debounce search; also refetches when the header project/time scope changes.
   useEffect(() => {
     const t = setTimeout(() => {
-      void fetchEvents(search.trim() || undefined);
+      void fetchEvents(searchQuery.trim() || undefined);
     }, 300);
     return () => clearTimeout(t);
-  }, [search, fetchEvents]);
+  }, [searchQuery, fetchEvents]);
 
   const isEmpty =
-    state.status === "success" && state.events.length === 0 && !search;
+    state.status === "success" && state.events.length === 0 && !searchQuery;
 
   return (
     <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
@@ -114,9 +118,9 @@ export function EventsOverview() {
       {/* Search bar */}
       <div className="mt-5">
         <EventsSearchBar
-          value={search}
-          onChange={setSearch}
-          onRefresh={() => void fetchEvents(search.trim() || undefined)}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onRefresh={() => void fetchEvents(searchQuery.trim() || undefined)}
           loading={state.status === "loading"}
         />
       </div>
@@ -137,7 +141,7 @@ export function EventsOverview() {
           <p className="text-rose-400">{state.message}</p>
           <button
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
-            onClick={() => void fetchEvents(search.trim() || undefined)}
+            onClick={() => void fetchEvents(searchQuery.trim() || undefined)}
             type="button"
           >
             Retry
@@ -164,14 +168,14 @@ export function EventsOverview() {
       {/* Search returned nothing */}
       {state.status === "success" &&
         state.events.length === 0 &&
-        search.trim() && (
+        searchQuery.trim() && (
           <div className="mt-12 flex flex-col items-center gap-2 text-center">
             <p className="font-bold text-slate-400">
-              No events matching &ldquo;{search}&rdquo;
+              No events matching &ldquo;{searchQuery}&rdquo;
             </p>
             <button
               className="mt-2 text-sm font-bold text-cyan-400 hover:text-cyan-300"
-              onClick={() => setSearch("")}
+              onClick={() => setSearchQuery("")}
               type="button"
             >
               Clear search

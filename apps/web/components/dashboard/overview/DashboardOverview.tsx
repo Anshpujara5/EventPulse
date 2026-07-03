@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ALL_PROJECTS_ID,
+  useDashboardHeaderState,
+} from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import type { DashboardSummary } from "./dashboard-types";
 import { DashboardStats } from "./DashboardStats";
 import { EmptyDashboard } from "./EmptyDashboard";
@@ -16,6 +20,8 @@ type FetchState =
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
 export function DashboardOverview() {
+  const { searchQuery, selectedProjectId, selectedProject } =
+    useDashboardHeaderState();
   const [state, setState] = useState<FetchState>({ status: "loading" });
 
   async function fetchSummary() {
@@ -60,6 +66,58 @@ export function DashboardOverview() {
     state.data.totalProjects === 0 &&
     state.data.totalApiKeys === 0;
 
+  // The header search + project selector filter the recent lists client-side.
+  // Stat cards stay global account totals (no per-project/time meaning).
+  const isScoped = selectedProjectId !== ALL_PROJECTS_ID;
+  const query = searchQuery.trim().toLowerCase();
+  const isFiltering = isScoped || query.length > 0;
+
+  const filtered = useMemo(() => {
+    if (state.status !== "success") {
+      return { projects: [], apiKeys: [] };
+    }
+
+    const projects = state.data.recentProjects.filter((project) => {
+      const matchesScope = !isScoped || project.id === selectedProjectId;
+      const matchesSearch =
+        !query ||
+        [project.name, project.domain, project.status].some((value) =>
+          value.toLowerCase().includes(query),
+        );
+      return matchesScope && matchesSearch;
+    });
+
+    const apiKeys = state.data.recentApiKeys.filter((apiKey) => {
+      const matchesScope = !isScoped || apiKey.project.id === selectedProjectId;
+      const matchesSearch =
+        !query ||
+        [
+          apiKey.name,
+          apiKey.project.name,
+          apiKey.maskedKey,
+          apiKey.keyPrefix,
+          apiKey.status,
+        ].some((value) => value.toLowerCase().includes(query));
+      return matchesScope && matchesSearch;
+    });
+
+    return { projects, apiKeys };
+  }, [state, isScoped, selectedProjectId, query]);
+
+  const scopeNote = (() => {
+    if (!isFiltering) {
+      return null;
+    }
+    const parts: string[] = [];
+    if (isScoped) {
+      parts.push(`project “${selectedProject?.name ?? "Selected"}”`);
+    }
+    if (query) {
+      parts.push(`matching “${searchQuery.trim()}”`);
+    }
+    return `Recent lists filtered by ${parts.join(" · ")}`;
+  })();
+
   return (
     <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
       <div className="mb-4">
@@ -97,9 +155,19 @@ export function DashboardOverview() {
         <>
           <DashboardStats summary={state.data} />
 
+          {scopeNote ? (
+            <p className="mt-4 text-xs font-bold text-slate-400">{scopeNote}</p>
+          ) : null}
+
           <section className="mt-4 grid gap-4 xl:grid-cols-2">
-            <RecentProjectsCard projects={state.data.recentProjects} />
-            <RecentApiKeysCard apiKeys={state.data.recentApiKeys} />
+            <RecentProjectsCard
+              projects={filtered.projects}
+              emptyLabel={isFiltering ? "No matching projects." : undefined}
+            />
+            <RecentApiKeysCard
+              apiKeys={filtered.apiKeys}
+              emptyLabel={isFiltering ? "No matching API keys." : undefined}
+            />
           </section>
 
           <section className="mt-4">

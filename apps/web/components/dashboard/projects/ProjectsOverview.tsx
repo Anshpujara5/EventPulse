@@ -3,6 +3,7 @@
 import { FilterDropdown } from "@/components/common/FilterDropdown";
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import { useDashboardHeaderState } from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import { apiRequest } from "@/lib/api";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ProjectCard, type Project } from "./ProjectCard";
@@ -69,6 +70,9 @@ function formatDate(value?: string) {
 }
 
 export function ProjectsOverview() {
+  // Search is driven by the shared header search box; status/sort stay local.
+  const { searchQuery, setSearchQuery, selectedProjectId } =
+    useDashboardHeaderState();
   const [createError, setCreateError] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState<CreateProjectForm>(initialForm);
@@ -76,7 +80,6 @@ export function ProjectsOverview() {
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("updated");
 
@@ -330,23 +333,17 @@ export function ProjectsOverview() {
             </p>
             <p className="mt-1 text-sm text-slate-400">
               {projects.length === 0
-                ? "Create your first project to start sending events to EventPulse."
+                ? "Create your first project below to start sending events to EventPulse."
                 : "Try a different search term."}
             </p>
-            {projects.length === 0 ? (
-              <button
-                className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
-                onClick={openCreateForm}
-                type="button"
-              >
-                <span className="text-xl leading-none">+</span>
-                Create Project
-              </button>
-            ) : null}
           </div>
         ) : (
           filteredProjects.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              isSelected={project.id === selectedProjectId}
+            />
           ))
         )}
       </GlowCard>

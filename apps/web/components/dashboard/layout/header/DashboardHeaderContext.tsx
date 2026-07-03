@@ -18,6 +18,16 @@ import type {
 export const ALL_PROJECTS_ID = "all";
 
 const SELECTED_PROJECT_KEY = "eventpulse_selected_project";
+const TIME_RANGE_KEY = "eventpulse_time_range";
+
+export type TimeRange = "24h" | "7d" | "30d" | "all";
+
+export const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
+  { value: "24h", label: "Last 24 hours" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "all", label: "All time" },
+];
 
 type DashboardHeaderContextValue = {
   projects: Project[];
@@ -25,6 +35,10 @@ type DashboardHeaderContextValue = {
   selectedProjectId: string;
   selectedProject: Project | null;
   setSelectedProjectId: (id: string) => void;
+  timeRange: TimeRange;
+  setTimeRange: (range: TimeRange) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 };
 
 const DashboardHeaderContext = createContext<DashboardHeaderContextValue | null>(
@@ -42,6 +56,13 @@ export function DashboardHeaderProvider({ children }: { children: ReactNode }) {
     SELECTED_PROJECT_KEY,
     ALL_PROJECTS_ID,
   );
+  const [timeRange, setTimeRange] = useLocalStorage<TimeRange>(
+    TIME_RANGE_KEY,
+    "24h",
+  );
+  // Search is intentionally transient (not persisted): a shared query the
+  // header search box writes to and each page reads to filter its own data.
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     let isActive = true;
@@ -92,6 +113,10 @@ export function DashboardHeaderProvider({ children }: { children: ReactNode }) {
       selectedProjectId,
       selectedProject,
       setSelectedProjectId,
+      timeRange,
+      setTimeRange,
+      searchQuery,
+      setSearchQuery,
     }),
     [
       projects,
@@ -99,6 +124,10 @@ export function DashboardHeaderProvider({ children }: { children: ReactNode }) {
       selectedProjectId,
       selectedProject,
       setSelectedProjectId,
+      timeRange,
+      setTimeRange,
+      searchQuery,
+      setSearchQuery,
     ],
   );
 
