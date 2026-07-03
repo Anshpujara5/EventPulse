@@ -79,7 +79,7 @@ export function AnalyticsOverview() {
     state.status === "success" && state.data.summary.totalEvents === 0;
 
   return (
-    <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
+    <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Analytics</h1>

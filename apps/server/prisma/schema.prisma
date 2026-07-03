@@ -16,6 +16,7 @@ model User {
   projects     Project[]
   apiKeys      ApiKey[]
   events       Event[]
+  alerts       Alert[]
 }
 
 model Project {
@@ -30,6 +31,7 @@ model Project {
   updatedAt   DateTime      @updatedAt
   apiKeys     ApiKey[]
   events      Event[]
+  alerts      Alert[]
 }
 
 model ApiKey {
@@ -67,7 +69,47 @@ model Event {
   @@index([projectId, createdAt(sort: Desc)])
 }
 
+model Alert {
+  id            String         @id @default(cuid())
+  name          String
+  eventName     String
+  threshold     Int
+  windowMinutes Int
+  status        AlertStatus    @default(ACTIVE)
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  triggers      AlertTrigger[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([projectId])
+  @@index([projectId, eventName, status])
+}
+
+// A real, saved record of an alert rule reaching its threshold. Created only
+// by the ingestion path (see evaluateAlertsForEvent) — never fabricated in
+// the UI. eventCount/threshold are snapshots at trigger time so the record
+// stays meaningful even if the alert rule is edited later.
+model AlertTrigger {
+  id         String   @id @default(cuid())
+  alertId    String
+  alert      Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  eventCount Int
+  threshold  Int
+  createdAt  DateTime @default(now())
+
+  @@index([alertId, createdAt(sort: Desc)])
+}
+
 enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AlertStatus {
   ACTIVE
   INACTIVE
 }

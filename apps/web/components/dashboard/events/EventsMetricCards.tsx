@@ -16,7 +16,7 @@ function buildCards(summary: EventSummary): MetricDef[] {
     {
       label: "Total Events",
       value: summary.total.toLocaleString(),
-      detail: "All time across all projects",
+      detail: "All time, all projects — unfiltered",
       icon: "database",
       tone: "text-cyan-400",
       boxClassName: "border-cyan-400/25 bg-cyan-500/10",
@@ -24,10 +24,18 @@ function buildCards(summary: EventSummary): MetricDef[] {
     {
       label: "Events Today",
       value: summary.today.toLocaleString(),
-      detail: "Since midnight UTC",
+      detail: "Since midnight UTC — unfiltered",
       icon: "pulse",
       tone: "text-emerald-400",
       boxClassName: "border-emerald-400/20 bg-emerald-500/10",
+    },
+    {
+      label: "Matching Filters",
+      value: summary.matching.toLocaleString(),
+      detail: "Events in the list below, current scope",
+      icon: "search",
+      tone: "text-violet-400",
+      boxClassName: "border-violet-400/25 bg-violet-500/10",
     },
   ];
 }

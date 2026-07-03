@@ -92,7 +92,7 @@ export function EventsOverview() {
     state.status === "success" && state.events.length === 0 && !searchQuery;
 
   return (
-    <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
+    <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
       <div>
         <h1 className="text-3xl font-black tracking-tight">Events</h1>
         <p className="mt-1 text-sm text-slate-400">
@@ -157,6 +157,7 @@ export function EventsOverview() {
         <section className="mt-4">
           <EventsTable
             events={state.events}
+            matching={state.summary.matching}
             selected={selected}
             onSelect={setSelected}
           />

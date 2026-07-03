@@ -143,7 +143,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
   if (status === "loading") {
     return (
-      <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
+      <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
         {backLink}
         <div className="mt-6 flex h-64 items-center justify-center">
           <div className="flex flex-col items-center gap-3">
@@ -157,7 +157,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
   if (status === "notFound") {
     return (
-      <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
+      <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
         {backLink}
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
           <div className="flex size-12 items-center justify-center rounded-full border border-slate-800/70 bg-slate-900/60 text-slate-500">
@@ -180,7 +180,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
   if (status === "error" || !project) {
     return (
-      <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
+      <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
         {backLink}
         <div className="mt-10 flex flex-col items-center gap-4 text-center">
           <p className="text-rose-400">{errorMsg || "Failed to load project"}</p>
@@ -240,7 +240,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   ];
 
   return (
-    <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
+    <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {backLink}
         <Link
@@ -462,7 +462,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
       </GlowCard>
 
       {/* API keys for this project */}
-      <GlowCard className="mt-4 overflow-hidden">
+      <GlowCard className="mt-4 max-w-full overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-800/70 px-5 py-4">
           <div>
             <h2 className="text-lg font-black text-white">API Keys</h2>
@@ -486,8 +486,9 @@ export function ProjectView({ projectId }: { projectId: string }) {
             <p className="text-sm text-slate-500">No API keys yet.</p>
           </div>
         ) : (
-          <>
-            <div className="hidden grid-cols-[1.3fr_1.3fr_0.8fr_0.9fr_0.9fr] px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 lg:grid">
+          <div className="overflow-x-auto">
+          <div className="2xl:min-w-[860px]">
+            <div className="hidden grid-cols-[1.3fr_1.3fr_0.8fr_0.9fr_0.9fr] px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 2xl:grid">
               <span>Name</span>
               <span>Masked Key</span>
               <span>Status</span>
@@ -496,7 +497,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
             </div>
             {apiKeys.map((key) => (
               <div
-                className="grid gap-2 border-t border-slate-800/70 px-5 py-4 text-sm lg:grid-cols-[1.3fr_1.3fr_0.8fr_0.9fr_0.9fr] lg:items-center"
+                className="grid gap-2 border-t border-slate-800/70 px-5 py-4 text-sm 2xl:grid-cols-[1.3fr_1.3fr_0.8fr_0.9fr_0.9fr] 2xl:items-center"
                 key={key.id}
               >
                 <p className="truncate font-black text-white" title={key.name}>
@@ -522,7 +523,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
                 <p className="text-slate-400">{formatDate(key.createdAt)}</p>
               </div>
             ))}
-          </>
+          </div>
+          </div>
         )}
       </GlowCard>
 

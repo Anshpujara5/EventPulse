@@ -242,14 +242,22 @@ export function ProjectsOverview() {
   }
 
   return (
-    <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+    <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Projects</h1>
           <p className="mt-1 text-sm text-slate-400">
             Manage apps and products that send events to EventPulse.
           </p>
         </div>
+        <button
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
+          onClick={openCreateForm}
+          type="button"
+        >
+          <span className="text-xl leading-none">+</span>
+          Create Project
+        </button>
       </div>
 
       <section className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -301,22 +309,13 @@ export function ProjectsOverview() {
         ))}
       </section>
 
-      <GlowCard className="mt-4 overflow-hidden">
-        <div className="hidden grid-cols-[minmax(220px,2fr)_minmax(0,1.05fr)_112px_minmax(0,0.95fr)_120px_120px_164px] px-5 py-4 text-xs font-bold uppercase tracking-wide text-slate-500 lg:grid">
-          <span>Project</span>
-          <span>Domain</span>
-          <span>Status</span>
-          <span>Description</span>
-          <span>Created</span>
-          <span>Updated</span>
-          <span className="text-right">Actions</span>
-        </div>
+      <GlowCard className="mt-4 max-w-full overflow-hidden">
         {isLoading ? (
-          <div className="border-t border-slate-800/80 px-5 py-10 text-center text-sm font-bold text-slate-400">
+          <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">
             Loading projects...
           </div>
         ) : error ? (
-          <div className="border-t border-slate-800/80 px-5 py-10 text-center">
+          <div className="px-5 py-10 text-center">
             <p className="text-sm font-bold text-rose-300">{error}</p>
             <button
               className="mt-4 rounded-xl border border-slate-700/80 bg-slate-950/35 px-4 py-2 text-sm font-bold text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-300"
@@ -327,17 +326,30 @@ export function ProjectsOverview() {
             </button>
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div className="border-t border-slate-800/80 px-5 py-10 text-center">
+          <div className="px-5 py-10 text-center">
             <p className="text-lg font-black text-white">
               {projects.length === 0 ? "No projects yet" : "No projects found"}
             </p>
             <p className="mt-1 text-sm text-slate-400">
               {projects.length === 0
-                ? "Create your first project below to start sending events to EventPulse."
+                ? "Create your first project to start sending events to EventPulse."
                 : "Try a different search term."}
             </p>
+            {projects.length === 0 ? (
+              <button
+                className="mx-auto mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
+                onClick={openCreateForm}
+                type="button"
+              >
+                <span className="text-xl leading-none">+</span>
+                Create Project
+              </button>
+            ) : null}
           </div>
         ) : (
+          // ProjectCard uses a flex-wrap row internally, so it reflows to
+          // narrower widths on its own — no fixed table columns or internal
+          // horizontal scroll needed here.
           filteredProjects.map((project) => (
             <ProjectCard
               key={project.id}
@@ -347,30 +359,6 @@ export function ProjectsOverview() {
           ))
         )}
       </GlowCard>
-
-      <section className="mt-4 rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/35 p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex size-14 items-center justify-center rounded-full border border-blue-400/40 bg-blue-500/10 text-3xl font-light text-cyan-300">
-              +
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-white">New project</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Create a new project to start sending events to EventPulse.
-              </p>
-            </div>
-          </div>
-          <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
-            onClick={openCreateForm}
-            type="button"
-          >
-            <span className="text-xl leading-none">+</span>
-            Create new project
-          </button>
-        </div>
-      </section>
 
       {isCreateOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm">

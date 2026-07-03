@@ -137,16 +137,14 @@ export function ApiKeysOverview() {
 
       setApiKeys(apiKeysResponse.data.apiKeys);
       setProjects(projectsResponse.data.projects);
-      setSelectedApiKeyId((currentId) => {
-        if (
-          currentId &&
-          apiKeysResponse.data.apiKeys.some((apiKey) => apiKey.id === currentId)
-        ) {
-          return currentId;
-        }
-
-        return apiKeysResponse.data.apiKeys[0]?.id;
-      });
+      // Keep the details drawer open on the same key across a refresh, but
+      // don't auto-open one — the drawer is opt-in via "View" now.
+      setSelectedApiKeyId((currentId) =>
+        currentId &&
+        apiKeysResponse.data.apiKeys.some((apiKey) => apiKey.id === currentId)
+          ? currentId
+          : undefined,
+      );
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -216,9 +214,11 @@ export function ApiKeysOverview() {
   }, [scopedApiKeys, searchQuery, activeProjectFilter, statusFilter]);
 
   const metrics = useMemo(() => buildMetrics(scopedApiKeys), [scopedApiKeys]);
-  const selectedApiKey =
-    filteredApiKeys.find((apiKey) => apiKey.id === selectedApiKeyId) ??
-    filteredApiKeys[0];
+  // The drawer only opens when a key is explicitly selected via "View" — no
+  // fallback to the first row, unlike the old always-visible bottom panel.
+  const selectedApiKey = filteredApiKeys.find(
+    (apiKey) => apiKey.id === selectedApiKeyId,
+  );
 
   const handleOpenCreate = () => {
     setCreateError("");
@@ -315,12 +315,22 @@ export function ApiKeysOverview() {
   };
 
   return (
-    <div className="mx-auto max-w-[1420px] px-4 py-5 sm:px-6">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight">API Keys</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Create and manage secure keys for sending events to EventPulse.
-        </p>
+    <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">API Keys</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Create and manage secure keys for sending events to EventPulse.
+          </p>
+        </div>
+        <button
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
+          onClick={handleOpenCreate}
+          type="button"
+        >
+          <span className="text-xl leading-none">+</span>
+          Create new key
+        </button>
       </div>
 
       <ApiKeysFilterBar
@@ -340,7 +350,10 @@ export function ApiKeysOverview() {
         ))}
       </section>
 
-      <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      {/* The aside only sits beside the table on wide monitors (2xl+). On
+          typical laptop widths it stacks below so the table keeps its full
+          natural width instead of squeezing against a fixed 340px column. */}
+      <section className="mt-4 grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="grid min-w-0 gap-4">
           {newApiKey ? (
             <section className="rounded-2xl border border-cyan-400/30 bg-cyan-500/8 p-5 shadow-[0_0_28px_rgba(34,211,238,0.12)]">
@@ -400,41 +413,22 @@ export function ApiKeysOverview() {
             onSelect={setSelectedApiKeyId}
             selectedApiKeyId={selectedApiKey?.id}
           />
-          <section className="rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/35 p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex size-14 items-center justify-center rounded-full border border-blue-400/40 bg-blue-500/10 text-3xl font-light text-cyan-300">
-                  +
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-white">Create API Key</h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Generate a new API key to start sending events to EventPulse.
-                  </p>
-                </div>
-              </div>
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"
-                onClick={handleOpenCreate}
-                type="button"
-              >
-                <span className="text-xl leading-none">+</span>
-                Create new key
-              </button>
-            </div>
-          </section>
         </div>
 
         <aside className="grid min-w-0 gap-4">
           <SecurityBestPracticesCard />
-          <ApiKeyDetailsPanel
-            apiKey={selectedApiKey}
-            isRevoking={isRevoking}
-            rawApiKey={selectedRawApiKey}
-            onRevoke={handleRevokeApiKey}
-          />
         </aside>
       </section>
+
+      {/* API key details open as a right-side drawer (see View in the table)
+          instead of a card in the normal page flow. */}
+      <ApiKeyDetailsPanel
+        apiKey={selectedApiKey}
+        isRevoking={isRevoking}
+        onClose={() => setSelectedApiKeyId(undefined)}
+        onRevoke={handleRevokeApiKey}
+        rawApiKey={selectedRawApiKey}
+      />
 
       {isCreateOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm">

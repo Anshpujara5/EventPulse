@@ -10,6 +10,7 @@ const SEARCH_PLACEHOLDERS: Record<string, string> = {
   "/dashboard/projects": "Search projects...",
   "/dashboard/api-keys": "Search API keys...",
   "/dashboard/events": "Search events by name...",
+  "/dashboard/alerts": "Search alerts...",
 };
 
 export function HeaderSearch() {
@@ -20,9 +21,9 @@ export function HeaderSearch() {
   const isSearchable = placeholder !== undefined;
 
   return (
-    <div className="min-w-0 shrink">
+    <div className="min-w-0 flex-1">
       <div
-        className={`flex h-12 w-64 items-center gap-3 rounded-xl border px-4 md:w-80 xl:w-[410px] ${
+        className={`flex h-12 w-full max-w-2xl items-center gap-3 rounded-xl border px-4 ${
           isSearchable
             ? "border-slate-700/80 bg-slate-950/60 text-slate-400"
             : "border-slate-800/70 bg-slate-950/40 text-slate-600"

@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import alertRoutes from "./routes/alert.routes";
 import apiKeyRoutes from "./routes/apiKey.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import authRoutes from "./routes/auth.routes";
@@ -30,6 +31,7 @@ app.use("/api/api-keys", apiKeyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/alerts", alertRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({

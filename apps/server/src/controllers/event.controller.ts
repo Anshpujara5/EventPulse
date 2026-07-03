@@ -3,6 +3,7 @@ import crypto from "crypto";
 import type { Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
+import { evaluateAlertsForEvent } from "../utils/alertEvaluation";
 import { hashApiKey } from "../utils/apiKey";
 import { rangeToInterval } from "../utils/timeRange";
 
@@ -201,7 +202,16 @@ export async function ingestEventController(req: Request, res: Response) {
       WHERE id = ${apiKeyRow.id}
     `;
 
-    // 6. Return minimal event confirmation
+    // 6. Evaluate active alerts for this project/event. Best-effort and
+    // never throws — a failure here cannot turn a stored event into a
+    // failed ingestion request.
+    await evaluateAlertsForEvent({
+      userId: apiKeyRow.userId,
+      projectId: apiKeyRow.projectId,
+      eventName,
+    });
+
+    // 7. Return minimal event confirmation
     const [createdEvent] = await prisma.$queryRaw<
       Pick<EventRow, "id" | "name" | "projectId" | "createdAt">[]
     >`
@@ -281,16 +291,28 @@ export async function getEventsController(req: AuthRequest, res: Response) {
       LIMIT ${limit}
     `;
 
-    // Count totals for summary cards
-    const [totals] = await prisma.$queryRaw<
-      { total: bigint; today: bigint }[]
-    >`
-      SELECT
-        COUNT(*)                                                        AS total,
-        COUNT(*) FILTER (WHERE e."createdAt" >= CURRENT_DATE)          AS today
-      FROM "Event" e
-      WHERE e."userId" = ${userId}
-    `;
+    // Total/today are unfiltered (all projects, all time) — a stable,
+    // always-on-screen headline number. "matching" reuses the exact same
+    // filter fragments as the list query above, so the UI can honestly show
+    // how many events match the current project/range/search scope even
+    // though only `limit` rows are returned.
+    const [[totals], [matchingRow]] = await Promise.all([
+      prisma.$queryRaw<{ total: bigint; today: bigint }[]>`
+        SELECT
+          COUNT(*)                                               AS total,
+          COUNT(*) FILTER (WHERE e."createdAt" >= CURRENT_DATE)  AS today
+        FROM "Event" e
+        WHERE e."userId" = ${userId}
+      `,
+      prisma.$queryRaw<{ matching: bigint }[]>`
+        SELECT COUNT(*) AS matching
+        FROM "Event" e
+        WHERE e."userId" = ${userId}
+        ${projFilter}
+        ${nameFilter}
+        ${rangeFilter}
+      `,
+    ]);
 
     return res.json({
       success: true,
@@ -299,6 +321,7 @@ export async function getEventsController(req: AuthRequest, res: Response) {
         summary: {
           total: Number(totals.total),
           today: Number(totals.today),
+          matching: Number(matchingRow.matching),
         },
       },
     });

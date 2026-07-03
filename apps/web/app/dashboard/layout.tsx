@@ -77,7 +77,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <main className="min-h-screen bg-[#020814] text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(14,165,233,0.16),transparent_30%),radial-gradient(circle_at_82%_14%,rgba(124,58,237,0.16),transparent_28%)]" />
       <DashboardHeaderProvider>
-        <div className="relative grid min-h-screen lg:grid-cols-[240px_1fr]">
+        <div className="relative grid min-h-screen lg:grid-cols-[240px_minmax(0,1fr)]">
           <DashboardSidebar />
 
           <section className="min-w-0">
