@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "seed:commerce-demo": "tsx scripts/seedCommerceDemoData.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.0.0",
