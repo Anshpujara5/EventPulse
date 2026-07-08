@@ -41,8 +41,13 @@ export function TopEventsCard({ events }: { events: TopEvent[] }) {
                       {event.name}
                     </span>
                   </span>
-                  <span className="font-black text-white">
-                    {event.count.toLocaleString()}
+                  <span className="flex items-baseline gap-2">
+                    <span className="font-black text-white">
+                      {event.count.toLocaleString()}
+                    </span>
+                    <span className="text-xs font-bold text-slate-500">
+                      {event.percentage}%
+                    </span>
                   </span>
                 </div>
                 <div className="mt-2 ml-9 h-1 rounded-full bg-slate-800">

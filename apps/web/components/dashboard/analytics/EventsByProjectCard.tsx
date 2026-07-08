@@ -34,8 +34,13 @@ export function EventsByProjectCard({
                       {p.projectName}
                     </span>
                   </span>
-                  <span className="font-black text-white">
-                    {p.count.toLocaleString()}
+                  <span className="flex items-baseline gap-2">
+                    <span className="font-black text-white">
+                      {p.count.toLocaleString()}
+                    </span>
+                    <span className="text-xs font-bold text-slate-500">
+                      {p.percentage}%
+                    </span>
                   </span>
                 </div>
                 <div className="mt-2 ml-9 h-1 rounded-full bg-slate-800">

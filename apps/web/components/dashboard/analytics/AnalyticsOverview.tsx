@@ -3,16 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ALL_PROJECTS_ID,
+  TIME_RANGE_OPTIONS,
   useDashboardHeaderState,
 } from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import type { AnalyticsData } from "./analytics-types";
 import { AnalyticsEmptyState } from "./AnalyticsEmptyState";
 import { AnalyticsMetricCards } from "./AnalyticsMetricCards";
 import { AnalyticsRefreshBar } from "./AnalyticsRefreshBar";
+import { CommerceFunnelCard } from "./CommerceFunnelCard";
 import { EventsByProjectCard } from "./EventsByProjectCard";
-import { HourlyTrendChart } from "./HourlyTrendChart";
+import { EventTrendChart } from "./HourlyTrendChart";
+import { HealthCard } from "./HealthCard";
+import { InsightsCard } from "./InsightsCard";
+import { PreviousPeriodCard } from "./PreviousPeriodCard";
 import { RecentActivityCard } from "./RecentActivityCard";
 import { TopEventsCard } from "./TopEventsCard";
+import { TopPropertiesCard } from "./TopPropertiesCard";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
@@ -23,8 +29,19 @@ type FetchState =
   | { status: "success"; data: AnalyticsData };
 
 export function AnalyticsOverview() {
-  const { selectedProjectId, timeRange } = useDashboardHeaderState();
+  const { selectedProjectId, selectedProject, timeRange } =
+    useDashboardHeaderState();
   const [state, setState] = useState<FetchState>({ status: "loading" });
+
+  const timeRangeLabel =
+    TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label ??
+    "All time";
+  const projectLabel =
+    selectedProjectId === ALL_PROJECTS_ID
+      ? "All projects"
+      : (selectedProject?.name ?? "Selected project");
+  const scopeLabel = `${projectLabel} · ${timeRangeLabel}`;
+  const isAllTime = timeRange === "all";
 
   const fetchAnalytics = useCallback(async () => {
     setState({ status: "loading" });
@@ -84,7 +101,10 @@ export function AnalyticsOverview() {
         <div>
           <h1 className="text-3xl font-black tracking-tight">Analytics</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Real metrics derived from your ingested events.
+            Real commerce metrics derived from your store&apos;s ingested events.
+          </p>
+          <p className="mt-2 text-xs font-bold text-cyan-300">
+            Scope: {scopeLabel}
           </p>
         </div>
         <AnalyticsRefreshBar
@@ -92,6 +112,13 @@ export function AnalyticsOverview() {
           onRefresh={() => void fetchAnalytics()}
         />
       </div>
+
+      <p className="mt-3 text-xs text-slate-500">
+        Based on events received in the selected time range. Percentages are
+        calculated within the current filter scope.
+        {isAllTime &&
+          " \"All time\" includes every event ever ingested for this scope."}
+      </p>
 
       {/* Loading */}
       {state.status === "loading" && (
@@ -123,16 +150,34 @@ export function AnalyticsOverview() {
       {/* Real data */}
       {state.status === "success" && !isEmpty && (
         <>
-          <AnalyticsMetricCards summary={state.data.summary} />
+          <AnalyticsMetricCards
+            summary={state.data.summary}
+            scopeLabel={scopeLabel}
+          />
+
+          <section className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
+            <PreviousPeriodCard comparison={state.data.comparison} />
+            <HealthCard health={state.data.health} />
+            <InsightsCard insights={state.data.insights} />
+          </section>
+
+          {/* Headline commerce section — aggregate funnel over the same scope */}
+          <section className="mt-4">
+            <CommerceFunnelCard funnel={state.data.commerceFunnel} />
+          </section>
 
           <section className="mt-4">
-            <HourlyTrendChart buckets={state.data.hourlyTrend} />
+            <EventTrendChart trend={state.data.trend} />
           </section>
 
           <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr_1.2fr]">
             <TopEventsCard events={state.data.topEvents} />
             <EventsByProjectCard projects={state.data.eventsByProject} />
             <RecentActivityCard events={state.data.recentActivity} />
+          </section>
+
+          <section className="mt-4">
+            <TopPropertiesCard properties={state.data.topProperties} />
           </section>
         </>
       )}

@@ -22,7 +22,7 @@ export function AnalyticsEmptyState() {
   http://localhost:5001/api/events/ingest \\
   -H "Authorization: Bearer ep_live_xxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"page_view","properties":{"path":"/"}}'`}
+  -d '{"name":"product_viewed","properties":{"product_id":"sku_123"}}'`}
           </pre>
         </div>
 
