@@ -221,7 +221,7 @@ export function AlertFormModal({
                     name: event.target.value,
                   }))
                 }
-                placeholder="Checkout spike"
+                placeholder="Payment failures spike"
                 value={form.name}
               />
             </label>
@@ -236,9 +236,13 @@ export function AlertFormModal({
                     eventName: event.target.value,
                   }))
                 }
-                placeholder="checkout.completed"
+                placeholder="payment_failed"
                 value={form.eventName}
               />
+              <span className="mt-1.5 block text-xs font-normal text-slate-500">
+                e.g. payment_failed, item_out_of_stock, checkout_started,
+                purchase_completed, delivery_fee_shown
+              </span>
             </label>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">

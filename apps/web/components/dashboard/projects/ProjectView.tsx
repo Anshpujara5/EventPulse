@@ -201,16 +201,17 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const hasActiveKey = apiKeys.some((key) => key.status === "ACTIVE");
   const ingestEndpoint = `${API_BASE}/api/events/ingest`;
   const sampleBody = `{
-  "name": "page_view",
+  "name": "product_viewed",
   "properties": {
-    "path": "/dashboard",
-    "source": "demo"
+    "product_id": "sku_123",
+    "category": "Grocery",
+    "price": 129
   }
 }`;
   const sampleCurl = `curl -X POST ${ingestEndpoint} \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"page_view","properties":{"path":"/dashboard","source":"demo"}}'`;
+  -d '{"name":"product_viewed","properties":{"product_id":"sku_123","category":"Grocery","price":129}}'`;
 
   const summaryCards = [
     {
@@ -368,10 +369,11 @@ export function ProjectView({ projectId }: { projectId: string }) {
           </div>
           <div>
             <h2 className="text-lg font-black text-white">
-              Send your first event
+              Send your first commerce event
             </h2>
             <p className="text-sm text-slate-400">
-              Ingest events from your app using an API key for this project.
+              Use this project&apos;s API key to send commerce events — product
+              views, carts, checkout, and purchases — from your store.
             </p>
           </div>
         </div>

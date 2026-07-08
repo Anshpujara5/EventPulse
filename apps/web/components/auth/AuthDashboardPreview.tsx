@@ -55,10 +55,10 @@ export function AuthDashboardPreview({ stats }: { stats: readonly StatItem[] }) 
 
           <div className="mt-3 rounded-lg border border-white/10 bg-white/3.5 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-black text-white">Event Stream</p>
+              <p className="text-xs font-black text-white">Commerce Events</p>
               <div className="flex gap-4 text-[10px] text-slate-400">
-                <span className="text-cyan-300">Requests</span>
-                <span className="text-rose-300">Errors</span>
+                <span className="text-cyan-300">Add to cart</span>
+                <span className="text-rose-300">Drop-off</span>
               </div>
             </div>
             <svg className="h-24 w-full" viewBox="0 0 360 110">
@@ -115,7 +115,7 @@ export function AuthDashboardPreview({ stats }: { stats: readonly StatItem[] }) 
             </div>
             <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <p className="mb-3 text-xs font-black text-white">
-                System Health
+                Funnel Signals
               </p>
               <div className="space-y-2 text-[11px]">
                 {previewHealthRows.map((item) => (

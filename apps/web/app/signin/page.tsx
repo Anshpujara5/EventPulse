@@ -2,15 +2,15 @@ import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import SignInForm from "./SignInForm";
 
 const previewStats = [
-  ["Events Ingested", "125,842", "12.8%"],
-  ["Events / min", "2,094", "8.4%"],
-  ["Active Alerts", "23", "3"],
+  ["Commerce Events", "125,842", "12.8%"],
+  ["Add to Cart", "18,204", "8.4%"],
+  ["Cart Abandonment", "63%", "2.1%"],
 ] as const;
 
 const benefits = [
-  ["Secure by design", "Your data is encrypted and always protected.", "shield"],
-  ["API-first", "Built for developers. Integrate in minutes.", "code"],
-  ["Real-time alerts", "Instant notifications when it matters.", "bolt"],
+  ["See where shoppers drop off", "Track product view → cart → checkout → purchase.", "chart"],
+  ["Surface checkout friction", "Spot payment failures and abandonment fast.", "shield"],
+  ["Rule-based insights", "Event-count analytics, no fake predictions.", "bolt"],
 ] as const;
 
 export default function SignInPage() {
@@ -28,8 +28,9 @@ export default function SignInPage() {
       cardTitleClassName="text-4xl font-black tracking-tight text-white"
       heroDescription={
         <>
-          EventPulse helps developers and teams ingest, track, analyze, and alert
-          on critical product and system events through powerful APIs.
+          Commerce analytics for e-commerce and quick-commerce stores. Understand
+          where shoppers drop off, why carts are abandoned, and what drives
+          purchases.
         </>
       }
       orbClassName="pointer-events-none absolute left-[22%] top-20 h-140 w-140 rounded-full border border-blue-500/10 bg-[radial-gradient(circle,rgba(37,99,235,0.18),transparent_60%)]"

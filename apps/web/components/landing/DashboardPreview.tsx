@@ -12,7 +12,7 @@ export function DashboardPreview() {
             <span className="text-sm font-bold text-white">EventPulse</span>
           </div>
           <div className="space-y-1.5 text-[11px] text-slate-300">
-            {["Overview", "Events", "Alerts", "Analytics", "Servers", "API Keys", "Projects", "Settings"].map(
+            {["Overview", "Events", "Alerts", "Analytics", "Projects", "API Keys", "Settings"].map(
               (item, index) => (
                 <div
                   className={`flex items-center gap-2 rounded-md px-2.5 py-2 ${
@@ -83,7 +83,7 @@ export function DashboardPreview() {
           <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.15fr]">
             <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-bold text-white">Event Stream</p>
+                <p className="text-xs font-bold text-white">Commerce Events</p>
                 <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300">
                   Live
                 </span>
@@ -115,7 +115,7 @@ export function DashboardPreview() {
 
             <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-bold text-white">API Traffic</p>
+                <p className="text-xs font-bold text-white">Add to Cart Trend</p>
                 <span className="text-[10px] text-cyan-300">View details</span>
               </div>
               <svg className="h-28 w-full" viewBox="0 0 320 120">
@@ -168,7 +168,7 @@ export function DashboardPreview() {
               </div>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/3.5 p-3">
-              <p className="mb-2 text-xs font-bold text-white">System Health</p>
+              <p className="mb-2 text-xs font-bold text-white">Funnel Signals</p>
               <div className="space-y-2">
                 {health.map((item) => (
                   <div className="flex items-center justify-between text-[11px]" key={item}>
@@ -177,7 +177,7 @@ export function DashboardPreview() {
                       {item}
                     </span>
                     <span className="rounded bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
-                      Healthy
+                      Tracked
                     </span>
                   </div>
                 ))}

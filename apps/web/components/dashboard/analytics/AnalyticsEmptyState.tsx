@@ -8,14 +8,15 @@ export function AnalyticsEmptyState() {
         <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-slate-700 bg-slate-800 text-violet-400">
           <Icon className="size-7" name="chart" />
         </div>
-        <h2 className="text-xl font-black text-white">No analytics data yet</h2>
+        <h2 className="text-xl font-black text-white">No commerce data yet</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Analytics are calculated from real ingested events. Send your first event to start seeing data here.
+          Analytics are calculated from real commerce events. Send your first
+          event to start seeing your shopper funnel here.
         </p>
 
         <div className="mt-6 w-full overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-left">
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            Ingest your first event
+            Send your first commerce event
           </p>
           <pre className="font-mono text-xs leading-relaxed text-cyan-100">
 {`curl -X POST \\

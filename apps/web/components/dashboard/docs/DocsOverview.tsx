@@ -10,30 +10,110 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001"
 const INGEST_ENDPOINT = `${API_BASE}/api/events/ingest`;
 
 const SAMPLE_BODY = `{
-  "name": "page_view",
+  "name": "product_viewed",
   "properties": {
-    "path": "/dashboard",
-    "source": "docs"
+    "product_id": "sku_123",
+    "product_name": "Organic Apples",
+    "category": "Grocery",
+    "price": 129,
+    "currency": "INR",
+    "source": "homepage"
   }
 }`;
 
 const SAMPLE_CURL = `curl -X POST ${INGEST_ENDPOINT} \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"page_view","properties":{"path":"/dashboard","source":"docs"}}'`;
+  -d '{"name":"product_viewed","properties":{"product_id":"sku_123","category":"Grocery","price":129}}'`;
 
 const IDEMPOTENCY_CURL = `curl -X POST ${INGEST_ENDPOINT} \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: checkout-completed-order-4821" \\
-  -d '{"name":"checkout.completed","properties":{"orderId":"4821"}}'`;
+  -H "Idempotency-Key: purchase-ord_123" \\
+  -d '{"name":"purchase_completed","properties":{"order_id":"ord_123","amount":1299,"currency":"INR"}}'`;
 
+// Recommended commerce event names — used consistently across the funnel and
+// friction analytics. Free-form names still work; these just line up with the
+// built-in commerce funnel and friction signals.
 const EVENT_NAME_EXAMPLES = [
-  "page_view",
-  "button_clicked",
-  "checkout.completed",
-  "user-signup",
+  "product_viewed",
+  "category_viewed",
+  "search_performed",
+  "add_to_cart",
+  "remove_from_cart",
+  "checkout_started",
+  "purchase_completed",
+  "payment_completed",
+  "payment_failed",
+  "item_out_of_stock",
+  "item_unavailable",
+  "delivery_fee_shown",
+  "eta_shown",
+  "coupon_applied",
 ] as const;
+
+// Representative commerce event bodies shown in the docs.
+const COMMERCE_EXAMPLES: { title: string; body: string }[] = [
+  {
+    title: "add_to_cart",
+    body: `{
+  "name": "add_to_cart",
+  "properties": {
+    "product_id": "sku_123",
+    "cart_value": 499,
+    "quantity": 2,
+    "category": "Grocery"
+  }
+}`,
+  },
+  {
+    title: "checkout_started",
+    body: `{
+  "name": "checkout_started",
+  "properties": {
+    "cart_value": 1299,
+    "cart_size": 5,
+    "delivery_fee": 49,
+    "eta_minutes": 18
+  }
+}`,
+  },
+  {
+    title: "purchase_completed",
+    body: `{
+  "name": "purchase_completed",
+  "properties": {
+    "order_id": "ord_123",
+    "amount": 1299,
+    "currency": "INR",
+    "payment_method": "upi"
+  }
+}`,
+  },
+  {
+    title: "payment_failed",
+    body: `{
+  "name": "payment_failed",
+  "properties": {
+    "amount": 1299,
+    "payment_method": "upi",
+    "reason": "bank_declined"
+  }
+}`,
+  },
+  {
+    title: "item_out_of_stock",
+    body: `{
+  "name": "item_out_of_stock",
+  "properties": {
+    "product_id": "sku_456",
+    "product_name": "Milk 1L",
+    "category": "Dairy",
+    "reason": "inventory_unavailable"
+  }
+}`,
+  },
+];
 
 const ERROR_RESPONSES: { code: string; label: string; detail: string }[] = [
   {
@@ -76,7 +156,8 @@ export function DocsOverview() {
       <div>
         <h1 className="text-3xl font-black tracking-tight">Developer Docs</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Send events to EventPulse from your app using a project API key.
+          Send commerce events from your store to EventPulse using a project API
+          key — track product views, carts, checkout, purchases, and friction.
         </p>
       </div>
 
@@ -212,13 +293,42 @@ export function DocsOverview() {
         </p>
       </GlowCard>
 
+      {/* Commerce event examples */}
+      <GlowCard className="mt-4 p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 text-emerald-300">
+            <Icon name="cube" className="size-5" />
+          </div>
+          <h2 className="text-lg font-black text-white">Commerce event examples</h2>
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-slate-300">
+          Copy any of these bodies as a starting point. Properties are free-form
+          — the ones below map cleanly to the commerce funnel and friction
+          signals.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {COMMERCE_EXAMPLES.map((example) => (
+            <div key={example.title}>
+              <p className="mb-1 font-mono text-xs font-bold text-cyan-300">
+                {example.title}
+              </p>
+              <pre className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-cyan-100">
+                {example.body}
+              </pre>
+            </div>
+          ))}
+        </div>
+      </GlowCard>
+
       {/* Event naming rules */}
       <GlowCard className="mt-4 p-6">
         <div className="flex items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 text-emerald-300">
             <Icon name="list" className="size-5" />
           </div>
-          <h2 className="text-lg font-black text-white">Event naming rules</h2>
+          <h2 className="text-lg font-black text-white">
+            Event naming &amp; recommended commerce events
+          </h2>
         </div>
         <ul className="mt-4 space-y-2 text-sm text-slate-300">
           <li className="flex gap-2">
@@ -231,7 +341,8 @@ export function DocsOverview() {
           </li>
           <li className="flex gap-2">
             <span className="text-cyan-400">•</span>
-            Simple, descriptive names work best.
+            Free-form names work, but these standard commerce names line up with
+            the built-in funnel and friction analytics.
           </li>
         </ul>
         <div className="mt-4 flex flex-wrap gap-2">

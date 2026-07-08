@@ -17,7 +17,7 @@ export function AuthBrandPanel({
   return (
     <div className="hidden lg:block">
       <h1 className="max-w-125 text-5xl font-black leading-[1.12] tracking-tight">
-        Monitor Every Event. React in{" "}
+        See Where Shoppers Drop Off. Convert in{" "}
         <span className="bg-linear-to-r from-cyan-300 via-blue-500 to-violet-500 bg-clip-text text-transparent">
           Real Time.
         </span>

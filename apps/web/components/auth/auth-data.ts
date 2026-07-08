@@ -6,24 +6,28 @@ export const sidebarItems = [
   "Events",
   "Alerts",
   "Analytics",
-  "Servers",
-  "API Keys",
   "Projects",
+  "API Keys",
   "Settings",
 ];
 
 export const defaultBottomBenefits = [
-  ["Real-time Monitoring", "Track and react instantly", "pulse"],
-  ["Powerful APIs", "RESTful, GraphQL & Webhooks", "code"],
-  ["Scalable Infrastructure", "Built to handle millions of events", "stack"],
-  ["Developer Friendly", "Docs, SDKs & 24/7 support", "heart"],
+  ["Commerce Funnel", "See product view → cart → purchase", "pulse"],
+  ["Simple Events API", "Send commerce events over HTTPS", "code"],
+  ["Friction Signals", "Surface out-of-stock and payment failures", "stack"],
+  ["Store Friendly", "Docs, examples & fast setup", "heart"],
 ] as const;
 
 export const authTrustBadges = [
-  "SOC 2 Type II Compliant",
   "GDPR Ready",
-  "99.9% Uptime SLA",
+  "Encrypted at Rest",
+  "Scoped API Keys",
 ];
 
-export const previewCategories = ["Auth 32%", "Payments 24%", "API 18%", "Errors 14%"];
-export const previewHealthRows = ["Ingestion", "Processing", "Alerts", "Database"];
+export const previewCategories = [
+  "Product views 38%",
+  "Add to cart 24%",
+  "Checkout 18%",
+  "Purchases 12%",
+];
+export const previewHealthRows = ["Product Views", "Add to Cart", "Checkout", "Purchases"];

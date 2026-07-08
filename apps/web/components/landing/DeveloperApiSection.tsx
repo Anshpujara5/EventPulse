@@ -12,11 +12,11 @@ export function DeveloperApiSection() {
           Developer Friendly
         </p>
         <h2 className="mt-4 text-2xl font-black text-white sm:text-3xl">
-          Simple APIs. Powerful Platform.
+          Simple API. Built for Commerce.
         </h2>
         <p className="mt-3 text-base leading-7 text-slate-300">
-          Integrate in minutes and start sending events with our
-          developer-first APIs.
+          Integrate in minutes and start sending commerce events like
+          product_viewed, add_to_cart, and purchase_completed.
         </p>
         <div className="mt-6 flex flex-wrap gap-3 text-xs font-bold text-slate-200">
           {apiBadges.map((badge, index) => (
@@ -37,23 +37,23 @@ export function DeveloperApiSection() {
       <div className="overflow-hidden rounded-lg border border-white/15 bg-[#07101f]/95 shadow-[0_0_30px_rgba(15,23,42,0.45)]">
         <div className="flex items-center justify-between border-b border-white/10 bg-white/4 px-4 py-2.5">
           <p className="font-mono text-sm font-bold text-cyan-300">
-            POST <span className="text-white">/v1/events</span>
+            POST <span className="text-white">/api/events/ingest</span>
           </p>
           <span className="rounded bg-white/5 px-2 py-1 text-[10px] text-slate-300">
             curl
           </span>
         </div>
         <pre className="overflow-x-auto p-4 text-[13px] leading-6 text-slate-300">
-          <code>{`curl -X POST https://api.eventpulse.dev/v1/events \\
+          <code>{`curl -X POST https://api.eventpulse.dev/api/events/ingest \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "event": "UserLogin",
-    "user_id": "user_123",
-    "timestamp": "2025-05-20T11:45:00Z",
+    "name": "add_to_cart",
     "properties": {
-      "ip": "203.0.113.42",
-      "device": "Chrome / macOS"
+      "product_id": "sku_123",
+      "cart_value": 499,
+      "quantity": 2,
+      "category": "Grocery"
     }
   }'`}</code>
         </pre>

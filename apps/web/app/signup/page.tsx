@@ -2,16 +2,16 @@ import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import SignUpForm from "./SignUpForm";
 
 const previewStats = [
-  ["Events Ingested", "125,842", "12.6%"],
-  ["Events / min", "2,094", "8.4%"],
-  ["Active Alerts", "23", "3"],
+  ["Commerce Events", "125,842", "12.6%"],
+  ["Add to Cart", "18,204", "8.4%"],
+  ["Cart Abandonment", "63%", "2.1%"],
 ] as const;
 
 const benefits = [
-  ["Create projects", "Organize each app or product in its own workspace.", "folder"],
-  ["Generate API keys", "Issue scoped keys for secure event ingestion.", "key"],
-  ["Send events", "Track product actions through simple HTTPS requests.", "send"],
-  ["View real-time analytics", "See activity, alerts, and trends instantly.", "chart"],
+  ["Connect your store", "Organize each store or brand in its own workspace.", "folder"],
+  ["Generate API keys", "Issue scoped keys to send commerce events securely.", "key"],
+  ["Send commerce events", "Track product views, carts, checkouts and purchases.", "send"],
+  ["See the shopper funnel", "Spot drop-offs, abandonment, and friction instantly.", "chart"],
 ] as const;
 
 export default function SignUpPage() {
@@ -24,13 +24,14 @@ export default function SignUpPage() {
       cardIcon="user"
       cardIconClassName="size-9"
       cardIconWrapperClassName="mx-auto flex size-[72px] items-center justify-center rounded-full border border-blue-500/40 bg-blue-600/10 text-cyan-400 shadow-[0_0_28px_rgba(37,99,235,0.34)]"
-      cardSubtitle="Start monitoring events with EventPulse."
+      cardSubtitle="Start understanding your shoppers with EventPulse."
       cardTitle="Create your account"
       cardTitleClassName="text-3xl font-black tracking-tight text-white"
       heroDescription={
         <>
-          Start tracking product events in minutes. Create projects, generate API
-          keys, send events, and view real-time analytics.
+          Start tracking commerce events in minutes. Connect your store, generate
+          API keys, send product view, cart, checkout and purchase events, and see
+          where shoppers drop off.
         </>
       }
       orbClassName="pointer-events-none absolute left-[22%] top-20 h-[560px] w-[560px] rounded-full border border-blue-500/10 bg-[radial-gradient(circle,rgba(37,99,235,0.18),transparent_60%)]"

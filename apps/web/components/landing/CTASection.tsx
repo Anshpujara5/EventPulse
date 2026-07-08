@@ -11,11 +11,11 @@ export function CTASection() {
             </div>
             <div>
               <h2 className="text-2xl font-black text-white">
-                Ready to build smarter, more reliable systems?
+                Ready to understand why shoppers don&apos;t buy?
               </h2>
               <p className="mt-2 text-sm text-slate-200">
-                Join thousands of developers monitoring millions of events in
-                real time.
+                Built for e-commerce and quick-commerce teams who want to see
+                drop-offs and grow conversion.
               </p>
             </div>
           </div>

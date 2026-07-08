@@ -9,16 +9,17 @@ export function EventsComingSoonCard() {
           <Icon name="pulse" />
         </div>
         <div>
-          <h2 className="font-black text-white">Event Tracking</h2>
+          <h2 className="font-black text-white">Commerce Event Tracking</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Event ingestion is not connected yet. Once you start sending events
-            via your API keys, live metrics and charts will appear here.
+            No commerce events connected yet. Once your store sends events like
+            product views, add to cart, checkout, and purchases, live metrics
+            and charts appear here.
           </p>
           <a
             className="mt-3 inline-block text-sm font-bold text-cyan-400 hover:text-cyan-300"
             href="/dashboard/api-keys"
           >
-            Get your API key to start sending events →
+            Get your API key to start sending commerce events →
           </a>
         </div>
       </div>

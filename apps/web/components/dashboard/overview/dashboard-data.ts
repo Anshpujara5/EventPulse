@@ -34,22 +34,22 @@ export const metrics = [
 ] as const;
 
 export const eventStream = [
-  ["UserLogin", "auth-service", "2s ago", "200", "bg-cyan-400"],
-  ["PaymentSuccess", "payments-service", "5s ago", "201", "bg-emerald-400"],
-  ["APIRequest", "api-gateway", "8s ago", "GET", "bg-blue-400"],
-  ["EmailSent", "notifications-service", "10s ago", "202", "bg-violet-400"],
-  ["ErrorOccurred", "auth-service", "12s ago", "500", "bg-rose-400"],
+  ["product_viewed", "sku_123 · Organic Apples", "2s ago", "OK", "bg-cyan-400"],
+  ["add_to_cart", "cart ₹499 · qty 2", "5s ago", "OK", "bg-emerald-400"],
+  ["checkout_started", "cart ₹1,299 · 5 items", "8s ago", "OK", "bg-blue-400"],
+  ["purchase_completed", "ord_8476 · ₹1,299", "10s ago", "OK", "bg-violet-400"],
+  ["payment_failed", "upi · bank_declined", "12s ago", "FAIL", "bg-rose-400"],
 ] as const;
 
 export const categories = [
-  ["Auth", "32%", "bg-cyan-400"],
-  ["Payments", "24%", "bg-blue-500"],
-  ["API", "18%", "bg-violet-500"],
-  ["Errors", "14%", "bg-rose-500"],
-  ["Others", "12%", "bg-amber-400"],
+  ["Product views", "32%", "bg-cyan-400"],
+  ["Add to cart", "24%", "bg-blue-500"],
+  ["Checkout", "18%", "bg-violet-500"],
+  ["Purchases", "14%", "bg-rose-500"],
+  ["Friction", "12%", "bg-amber-400"],
 ] as const;
 
-export const healthRows = ["Ingestion", "Processing", "Alerts", "Database"];
+export const healthRows = ["Product Views", "Add to Cart", "Checkout", "Purchases"];
 
 export const apiSummary = [
   ["Active API Keys", "5"],
@@ -59,17 +59,17 @@ export const apiSummary = [
 ] as const;
 
 export const activityRows = [
-  ["UserLogin", "Production App", "Accepted", "Just now"],
-  ["PaymentSuccess", "Web Dashboard", "Accepted", "1m ago"],
-  ["APIRequest", "Mobile App", "Accepted", "2m ago"],
-  ["EmailSent", "Production App", "Queued", "4m ago"],
-  ["ErrorOccurred", "Staging Environment", "Failed", "8m ago"],
+  ["product_viewed", "Main Store", "Accepted", "Just now"],
+  ["add_to_cart", "Main Store", "Accepted", "1m ago"],
+  ["checkout_started", "Mobile App", "Queued", "2m ago"],
+  ["purchase_completed", "Main Store", "Accepted", "4m ago"],
+  ["payment_failed", "Mobile App", "Failed", "8m ago"],
 ] as const;
 
 export const apiKeys = [
-  ["server-key-prod", "48.7K", "w-[92%]"],
+  ["web-store-key", "48.7K", "w-[92%]"],
   ["mobile-app-key", "32.1K", "w-[70%]"],
-  ["web-dashboard-key", "18.9K", "w-[50%]"],
+  ["quick-commerce-key", "18.9K", "w-[50%]"],
   ["staging-key", "8.4K", "w-[30%]"],
   ["analytics-key", "6.3K", "w-[24%]"],
 ] as const;

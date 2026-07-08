@@ -8,9 +8,11 @@ export function EventsEmptyState() {
         <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-slate-700 bg-slate-800 text-cyan-400">
           <Icon className="size-7" name="pulse" />
         </div>
-        <h2 className="text-xl font-black text-white">No events yet</h2>
+        <h2 className="text-xl font-black text-white">No commerce events yet</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Send your first event using a POST request to the ingest endpoint. Events will appear here in real time.
+          Track shopper actions as they move through your store. Send events like
+          product_viewed, add_to_cart, checkout_started, or purchase_completed
+          and they will appear here in real time.
         </p>
 
         <div className="mt-6 w-full overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-left">
@@ -22,7 +24,7 @@ export function EventsEmptyState() {
   https://your-api/api/events/ingest \\
   -H "Authorization: Bearer ep_live_xxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"user_signed_up","properties":{"plan":"free"}}'`}
+  -d '{"name":"add_to_cart","properties":{"product_id":"sku_123","cart_value":499}}'`}
           </pre>
         </div>
 

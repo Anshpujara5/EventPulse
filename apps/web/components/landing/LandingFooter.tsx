@@ -14,8 +14,8 @@ export function LandingFooter() {
             <span className="text-2xl font-black text-white">EventPulse</span>
           </div>
           <p className="mt-4 max-w-64 text-sm leading-6 text-slate-300">
-            Real-time event monitoring and alerting platform for modern
-            applications.
+            Commerce analytics for e-commerce and quick-commerce stores —
+            understand drop-offs, abandonment, and conversion.
           </p>
           <div className="mt-5 flex gap-4 text-slate-300">
             {socialLinks.map((item) => (
@@ -38,7 +38,7 @@ export function LandingFooter() {
             Subscribe to updates
           </h3>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            Get product updates and engineering insights straight to your
+            Get product updates and commerce analytics tips straight to your
             inbox.
           </p>
           <form className="mt-4 flex overflow-hidden rounded-md border border-white/10 bg-white/4.5">

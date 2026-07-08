@@ -10,7 +10,7 @@ export function FeaturesSection() {
     >
       <SectionLabel>Features</SectionLabel>
       <h2 className="mt-2 text-center text-2xl font-black tracking-tight text-white sm:text-3xl">
-        Built for Scale. Designed for Developers.
+        Built for Stores. Focused on Conversion.
       </h2>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">

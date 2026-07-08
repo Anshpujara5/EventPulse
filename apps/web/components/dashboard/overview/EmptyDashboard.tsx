@@ -9,7 +9,8 @@ export function EmptyDashboard() {
       </div>
       <h2 className="text-xl font-black text-white">Welcome to EventPulse</h2>
       <p className="mt-2 text-sm text-slate-400">
-        Get started by creating a project and generating your first API key.
+        Create a project for your store and generate an API key to start sending
+        commerce events.
       </p>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
         <a

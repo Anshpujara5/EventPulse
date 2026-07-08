@@ -96,7 +96,8 @@ export function EventsOverview() {
       <div>
         <h1 className="text-3xl font-black tracking-tight">Events</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Real-time event stream ingested via your API keys.
+          Real-time commerce event stream — shopper actions ingested via your
+          API keys.
         </p>
       </div>
 

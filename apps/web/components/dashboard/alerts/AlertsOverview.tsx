@@ -144,8 +144,8 @@ export function AlertsOverview() {
         <div>
           <h1 className="text-3xl font-black tracking-tight">Alerts</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Get notified when an event fires more than expected within a time
-            window.
+            Get notified when a commerce event — like payment_failed or
+            item_out_of_stock — fires more than expected within a time window.
           </p>
         </div>
         <button
@@ -194,7 +194,8 @@ export function AlertsOverview() {
             </div>
             <p className="mt-3 text-lg font-black text-white">No alerts yet</p>
             <p className="mt-1 text-sm text-slate-400">
-              Create your first alert to monitor event spikes.
+              Create your first alert to catch commerce spikes like payment
+              failures, out-of-stock items, or checkout drop-offs.
             </p>
             <button
               className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 px-5 text-sm font-black text-white shadow-[0_0_24px_rgba(79,70,229,0.25)]"

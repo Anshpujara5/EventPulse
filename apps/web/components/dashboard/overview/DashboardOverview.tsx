@@ -123,7 +123,7 @@ export function DashboardOverview() {
       <div className="mb-4">
         <h1 className="text-3xl font-black tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Monitor your projects and API keys.
+          An overview of your stores, API keys, and commerce event activity.
         </p>
       </div>
 

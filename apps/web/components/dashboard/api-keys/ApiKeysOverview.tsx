@@ -320,7 +320,8 @@ export function ApiKeysOverview() {
         <div>
           <h1 className="text-3xl font-black tracking-tight">API Keys</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Create and manage secure keys for sending events to EventPulse.
+            Create and manage secure keys for sending commerce events from your
+            store to EventPulse.
           </p>
         </div>
         <button

@@ -247,7 +247,7 @@ export function ProjectsOverview() {
         <div>
           <h1 className="text-3xl font-black tracking-tight">Projects</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Manage apps and products that send events to EventPulse.
+            Manage the stores that send commerce events to EventPulse.
           </p>
         </div>
         <button
@@ -332,7 +332,7 @@ export function ProjectsOverview() {
             </p>
             <p className="mt-1 text-sm text-slate-400">
               {projects.length === 0
-                ? "Create your first project to start sending events to EventPulse."
+                ? "Create your first project to start sending commerce events to EventPulse."
                 : "Try a different search term."}
             </p>
             {projects.length === 0 ? (
@@ -370,7 +370,7 @@ export function ProjectsOverview() {
               <div>
                 <h2 className="text-xl font-black text-white">Create Project</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Add an app or product that will send events to EventPulse.
+                  Add a store that will send commerce events to EventPulse.
                 </p>
               </div>
               <button
