@@ -6,21 +6,35 @@ import {
   hashApiKey,
 } from "../src/utils/apiKey";
 
-type EventName =
-  | "product_viewed"
-  | "add_to_cart"
-  | "checkout_started"
-  | "purchase_completed"
-  | "payment_completed"
-  | "payment_failed"
-  | "item_out_of_stock"
-  | "item_unavailable"
-  | "delivery_fee_shown"
-  | "eta_shown"
-  | "coupon_applied"
-  | "remove_from_cart"
-  | "search_performed"
-  | "category_viewed";
+const EVENT_NAMES = [
+  "product_viewed",
+  "add_to_cart",
+  "checkout_started",
+  "purchase_completed",
+  "payment_completed",
+  "payment_failed",
+  "item_out_of_stock",
+  "item_unavailable",
+  "delivery_fee_shown",
+  "eta_shown",
+  "coupon_applied",
+  "remove_from_cart",
+  "search_performed",
+  "category_viewed",
+] as const;
+
+type EventName = (typeof EVENT_NAMES)[number];
+
+type JourneyType =
+  | "browse_only"
+  | "product_interest"
+  | "cart_abandonment"
+  | "checkout_abandonment"
+  | "payment_failure"
+  | "successful_purchase"
+  | "quick_commerce_friction";
+
+type JourneyWeights = Record<JourneyType, number>;
 
 type Product = {
   id: string;
@@ -33,10 +47,13 @@ type ProjectSeed = {
   name: string;
   domain: string;
   description: string;
+  customerPrefix: string;
+  sessionPrefix: string;
+  customerCount: number;
   currency: string;
   source: string;
   products: Product[];
-  eventCounts: Record<EventName, number>;
+  journeyWeights: JourneyWeights;
   paymentMethods: string[];
   categories: string[];
 };
@@ -50,11 +67,32 @@ type SeededEvent = {
   createdAt: Date;
 };
 
+type JourneyContext = {
+  customerId: string;
+  sessionId: string;
+  product: Product;
+  cartSize: number;
+  cartValue: number;
+  deliveryFee: number;
+  etaMinutes: number;
+  orderId: string;
+  paymentMethod: string;
+};
+
+type SessionStats = {
+  purchaseSessions: number;
+  abandonedCartSessions: number;
+  checkoutAbandonedSessions: number;
+};
+
 const DEMO_PROJECTS: ProjectSeed[] = [
   {
     name: "QuickCart Grocery",
     domain: "quickcart-grocery.local",
     description: "Quick-commerce grocery storefront with delivery fee and ETA friction.",
+    customerPrefix: "quickcart_customer",
+    sessionPrefix: "quickcart_session",
+    customerCount: 700,
     currency: "USD",
     source: "Web SDK",
     products: [
@@ -64,21 +102,14 @@ const DEMO_PROJECTS: ProjectSeed[] = [
       { id: "qc-eggs-004", name: "Free Range Eggs", category: "Dairy", price: 7.2 },
       { id: "qc-snack-005", name: "Sea Salt Chips", category: "Snacks", price: 4.75 },
     ],
-    eventCounts: {
-      product_viewed: 520,
-      add_to_cart: 230,
-      checkout_started: 130,
-      purchase_completed: 70,
-      payment_completed: 20,
-      payment_failed: 45,
-      item_out_of_stock: 25,
-      item_unavailable: 20,
-      delivery_fee_shown: 90,
-      eta_shown: 110,
-      coupon_applied: 35,
-      remove_from_cart: 45,
-      search_performed: 90,
-      category_viewed: 95,
+    journeyWeights: {
+      browse_only: 55,
+      product_interest: 20,
+      cart_abandonment: 10,
+      checkout_abandonment: 6,
+      payment_failure: 2,
+      successful_purchase: 3,
+      quick_commerce_friction: 4,
     },
     paymentMethods: ["card", "wallet", "upi", "cash_on_delivery"],
     categories: ["Fresh Produce", "Dairy", "Bakery", "Snacks", "Beverages"],
@@ -87,6 +118,9 @@ const DEMO_PROJECTS: ProjectSeed[] = [
     name: "UrbanStyle Fashion",
     domain: "urbanstyle-fashion.local",
     description: "Fashion storefront with high browsing, coupons, and cart removals.",
+    customerPrefix: "urbanstyle_customer",
+    sessionPrefix: "urbanstyle_session",
+    customerCount: 850,
     currency: "USD",
     source: "Mobile SDK",
     products: [
@@ -96,21 +130,14 @@ const DEMO_PROJECTS: ProjectSeed[] = [
       { id: "us-tee-004", name: "Supima Cotton Tee", category: "Tops", price: 32 },
       { id: "us-bag-005", name: "Mini Crossbody Bag", category: "Accessories", price: 58 },
     ],
-    eventCounts: {
-      product_viewed: 650,
-      add_to_cart: 210,
-      checkout_started: 95,
-      purchase_completed: 55,
-      payment_completed: 15,
-      payment_failed: 40,
-      item_out_of_stock: 15,
-      item_unavailable: 20,
-      delivery_fee_shown: 20,
-      eta_shown: 25,
-      coupon_applied: 150,
-      remove_from_cart: 120,
-      search_performed: 160,
-      category_viewed: 140,
+    journeyWeights: {
+      browse_only: 62,
+      product_interest: 20,
+      cart_abandonment: 10,
+      checkout_abandonment: 3,
+      payment_failure: 1,
+      successful_purchase: 2,
+      quick_commerce_friction: 2,
     },
     paymentMethods: ["card", "wallet", "paypal", "buy_now_pay_later"],
     categories: ["Outerwear", "Footwear", "Dresses", "Tops", "Accessories"],
@@ -119,6 +146,9 @@ const DEMO_PROJECTS: ProjectSeed[] = [
     name: "FreshMart Express",
     domain: "freshmart-express.local",
     description: "Express grocery marketplace with strong conversion and stock issues.",
+    customerPrefix: "freshmart_customer",
+    sessionPrefix: "freshmart_session",
+    customerCount: 650,
     currency: "USD",
     source: "Server API",
     products: [
@@ -128,21 +158,14 @@ const DEMO_PROJECTS: ProjectSeed[] = [
       { id: "fm-chicken-004", name: "Herb Roast Chicken", category: "Prepared Foods", price: 13.75 },
       { id: "fm-berry-005", name: "Blueberry Pint", category: "Fresh Produce", price: 5.99 },
     ],
-    eventCounts: {
-      product_viewed: 430,
-      add_to_cart: 260,
-      checkout_started: 200,
-      purchase_completed: 165,
-      payment_completed: 30,
-      payment_failed: 25,
-      item_out_of_stock: 80,
-      item_unavailable: 50,
-      delivery_fee_shown: 45,
-      eta_shown: 70,
-      coupon_applied: 45,
-      remove_from_cart: 35,
-      search_performed: 90,
-      category_viewed: 80,
+    journeyWeights: {
+      browse_only: 55,
+      product_interest: 18,
+      cart_abandonment: 7,
+      checkout_abandonment: 3,
+      payment_failure: 1,
+      successful_purchase: 8,
+      quick_commerce_friction: 8,
     },
     paymentMethods: ["card", "wallet", "upi"],
     categories: ["Fresh Produce", "Beverages", "Dairy", "Prepared Foods"],
@@ -212,19 +235,150 @@ function money(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function createdAtFor(projectName: string, eventName: EventName): Date {
+function createEmptyEventCounts(): Record<EventName, number> {
+  return Object.fromEntries(EVENT_NAMES.map((name) => [name, 0])) as Record<
+    EventName,
+    number
+  >;
+}
+
+function formatSequenceId(prefix: string, value: number, digits: number): string {
+  return `${prefix}_${value.toString().padStart(digits, "0")}`;
+}
+
+function getSessionCountForCustomer(): number {
+  const roll = rng();
+
+  if (roll < 0.985) {
+    return 1;
+  }
+
+  if (roll < 0.997) {
+    return 2;
+  }
+
+  if (roll < 0.999) {
+    return 3;
+  }
+
+  return 4;
+}
+
+function pickJourneyType(weights: JourneyWeights): JourneyType {
+  const entries = Object.entries(weights) as [JourneyType, number][];
+  const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0);
+  let cursor = rng() * totalWeight;
+
+  for (const [journeyType, weight] of entries) {
+    cursor -= weight;
+
+    if (cursor <= 0) {
+      return journeyType;
+    }
+  }
+
+  return entries[entries.length - 1]?.[0] ?? "browse_only";
+}
+
+function chanceFor(project: ProjectSeed, signal: "coupon" | "delivery" | "eta" | "remove" | "search" | "stock" | "paymentComplete") {
+  const chances: Record<ProjectSeed["name"], Record<typeof signal, number>> = {
+    "QuickCart Grocery": {
+      coupon: 0.1,
+      delivery: 0.75,
+      eta: 0.75,
+      remove: 0.28,
+      search: 0.16,
+      stock: 0.12,
+      paymentComplete: 0.22,
+    },
+    "UrbanStyle Fashion": {
+      coupon: 0.45,
+      delivery: 0.18,
+      eta: 0.2,
+      remove: 0.7,
+      search: 0.28,
+      stock: 0.06,
+      paymentComplete: 0.18,
+    },
+    "FreshMart Express": {
+      coupon: 0.12,
+      delivery: 0.35,
+      eta: 0.45,
+      remove: 0.18,
+      search: 0.12,
+      stock: 0.35,
+      paymentComplete: 0.3,
+    },
+  };
+
+  return chances[project.name][signal];
+}
+
+function maybePush(events: EventName[], eventName: EventName, probability: number) {
+  if (rng() < probability) {
+    events.push(eventName);
+  }
+}
+
+function buildJourney(project: ProjectSeed, journeyType: JourneyType): EventName[] {
+  switch (journeyType) {
+    case "browse_only": {
+      const events: EventName[] = ["product_viewed", "category_viewed"];
+      maybePush(events, "search_performed", chanceFor(project, "search"));
+      return events;
+    }
+    case "product_interest": {
+      const events: EventName[] = ["product_viewed", "product_viewed"];
+      maybePush(events, "item_out_of_stock", chanceFor(project, "stock"));
+      return events;
+    }
+    case "cart_abandonment": {
+      const events: EventName[] = ["product_viewed", "add_to_cart"];
+      maybePush(events, "coupon_applied", chanceFor(project, "coupon"));
+      maybePush(events, "remove_from_cart", chanceFor(project, "remove"));
+      return events;
+    }
+    case "checkout_abandonment": {
+      const events: EventName[] = ["product_viewed", "add_to_cart"];
+      maybePush(events, "coupon_applied", chanceFor(project, "coupon"));
+      events.push("checkout_started");
+      maybePush(events, "delivery_fee_shown", chanceFor(project, "delivery"));
+      maybePush(events, "eta_shown", chanceFor(project, "eta"));
+      return events;
+    }
+    case "payment_failure":
+      return ["product_viewed", "add_to_cart", "checkout_started", "payment_failed"];
+    case "successful_purchase": {
+      const events: EventName[] = ["product_viewed", "add_to_cart"];
+      maybePush(events, "coupon_applied", chanceFor(project, "coupon"));
+      events.push("checkout_started", "purchase_completed");
+      maybePush(events, "payment_completed", chanceFor(project, "paymentComplete"));
+      return events;
+    }
+    case "quick_commerce_friction":
+      return [
+        "product_viewed",
+        "item_out_of_stock",
+        "item_unavailable",
+        "eta_shown",
+        "delivery_fee_shown",
+      ];
+  }
+}
+
+function createdAtForSession(projectName: string, journey: EventName[]): Date {
   const now = Date.now();
   const oneHour = 60 * 60 * 1000;
   const oneDay = 24 * oneHour;
 
-  const isPaymentFailureSpike = eventName === "payment_failed" && rng() < 0.45;
+  const isPaymentFailureSpike = journey.includes("payment_failed") && rng() < 0.45;
   const isFreshMartStockSpike =
     projectName === "FreshMart Express" &&
-    (eventName === "item_out_of_stock" || eventName === "item_unavailable") &&
+    (journey.includes("item_out_of_stock") || journey.includes("item_unavailable")) &&
     rng() < 0.55;
 
   if (isPaymentFailureSpike || isFreshMartStockSpike) {
-    return new Date(now - rng() * oneDay);
+    return new Date(now - 30 * 60 * 1000 - rng() * oneDay);
   }
 
   const spikeDaysAgo = pick([4, 12, 21]);
@@ -232,37 +386,44 @@ function createdAtFor(projectName: string, eventName: EventName): Date {
     return new Date(now - spikeDaysAgo * oneDay - rng() * oneDay);
   }
 
-  return new Date(now - rng() * 30 * oneDay);
+  return new Date(now - 30 * 60 * 1000 - rng() * 30 * oneDay);
 }
 
-function productProps(project: ProjectSeed) {
-  const product = pick(project.products);
-
-  return {
-    product_id: product.id,
-    product_name: product.name,
-    category: product.category,
-    price: product.price,
-    currency: project.currency,
-    source: project.source,
-  };
-}
-
-function eventProperties(project: ProjectSeed, eventName: EventName) {
-  if (rng() < 0.025) {
-    return {};
-  }
-
+function createJourneyContext(project: ProjectSeed, customerId: string, sessionId: string): JourneyContext {
   const product = pick(project.products);
   const cartSize = Math.max(1, Math.floor(rng() * 7) + 1);
   const cartValue = money(product.price * cartSize + rng() * 35);
   const deliveryFee = money(project.name === "QuickCart Grocery" ? 4 + rng() * 8 : rng() * 6);
   const etaMinutes = Math.floor(12 + rng() * (project.name === "QuickCart Grocery" ? 48 : 28));
 
+  return {
+    customerId,
+    sessionId,
+    product,
+    cartSize,
+    cartValue,
+    deliveryFee,
+    etaMinutes,
+    orderId: `ord_${Math.floor(rng() * 1_000_000).toString(16)}`,
+    paymentMethod: pick(project.paymentMethods),
+  };
+}
+
+function eventProperties(project: ProjectSeed, eventName: EventName, context: JourneyContext) {
+  const baseProperties = {
+    customer_id: context.customerId,
+    session_id: context.sessionId,
+  };
+
   switch (eventName) {
     case "product_viewed":
       return {
-        ...productProps(project),
+        ...baseProperties,
+        product_id: context.product.id,
+        product_name: context.product.name,
+        category: context.product.category,
+        price: context.product.price,
+        currency: project.currency,
         source: pick(["home_feed", "search", "category_page", project.source]),
         ...(project.name === "UrbanStyle Fashion"
           ? { size: pick(["XS", "S", "M", "L", "XL"]), color: pick(["black", "navy", "sage", "cream"]) }
@@ -270,81 +431,93 @@ function eventProperties(project: ProjectSeed, eventName: EventName) {
       };
     case "add_to_cart":
       return {
-        product_id: product.id,
-        cart_value: cartValue,
+        ...baseProperties,
+        product_id: context.product.id,
+        cart_value: context.cartValue,
         quantity: Math.max(1, Math.floor(rng() * 4) + 1),
-        category: product.category,
+        category: context.product.category,
       };
     case "checkout_started":
       return {
-        cart_value: cartValue,
-        cart_size: cartSize,
-        delivery_fee: deliveryFee,
-        eta_minutes: etaMinutes,
+        ...baseProperties,
+        cart_value: context.cartValue,
+        cart_size: context.cartSize,
+        delivery_fee: context.deliveryFee,
+        eta_minutes: context.etaMinutes,
       };
     case "purchase_completed":
     case "payment_completed":
       return {
-        order_id: `ord_${Math.floor(rng() * 1_000_000).toString(16)}`,
-        amount: cartValue,
+        ...baseProperties,
+        order_id: context.orderId,
+        amount: context.cartValue,
         currency: project.currency,
-        cart_size: cartSize,
-        payment_method: pick(project.paymentMethods),
+        cart_size: context.cartSize,
+        payment_method: context.paymentMethod,
       };
     case "payment_failed":
       return {
-        amount: cartValue,
-        payment_method: pick(project.paymentMethods),
+        ...baseProperties,
+        amount: context.cartValue,
+        payment_method: context.paymentMethod,
         reason: pick(["card_declined", "insufficient_funds", "gateway_timeout", "wallet_auth_failed"]),
       };
     case "item_out_of_stock":
       return {
-        product_id: product.id,
-        product_name: product.name,
-        category: product.category,
+        ...baseProperties,
+        product_id: context.product.id,
+        product_name: context.product.name,
+        category: context.product.category,
         reason: "out_of_stock",
       };
     case "item_unavailable":
       return {
-        product_id: product.id,
-        product_name: product.name,
-        category: product.category,
+        ...baseProperties,
+        product_id: context.product.id,
+        product_name: context.product.name,
+        category: context.product.category,
         reason: pick(["store_closed", "inventory_sync_delay", "delivery_area_unavailable"]),
       };
     case "delivery_fee_shown":
       return {
-        cart_value: cartValue,
-        delivery_fee: deliveryFee,
+        ...baseProperties,
+        cart_value: context.cartValue,
+        delivery_fee: context.deliveryFee,
         free_delivery_threshold: project.name === "QuickCart Grocery" ? 35 : 50,
       };
     case "eta_shown":
       return {
-        eta_minutes: etaMinutes,
+        ...baseProperties,
+        eta_minutes: context.etaMinutes,
         city: pick(["Mumbai", "Bengaluru", "Delhi", "Pune", "Hyderabad"]),
         fulfillment_mode: pick(["instant", "scheduled", "express"]),
       };
     case "coupon_applied":
       return {
+        ...baseProperties,
         coupon_code: pick(["WELCOME10", "SAVE15", "FRESH20", "STYLE25"]),
         discount_amount: money(4 + rng() * 24),
-        cart_value: cartValue,
+        cart_value: context.cartValue,
       };
     case "remove_from_cart":
       return {
-        product_id: product.id,
-        product_name: product.name,
-        category: product.category,
-        cart_value: cartValue,
+        ...baseProperties,
+        product_id: context.product.id,
+        product_name: context.product.name,
+        category: context.product.category,
+        cart_value: context.cartValue,
         reason: pick(["changed_mind", "price_check", "delivery_fee", "size_uncertain"]),
       };
     case "search_performed":
       return {
+        ...baseProperties,
         query: pick(project.products).name.toLowerCase(),
         results_count: Math.floor(4 + rng() * 80),
         source: project.source,
       };
     case "category_viewed":
       return {
+        ...baseProperties,
         category: pick(project.categories),
         source: pick(["home_nav", "search", "recommendation", "promo_tile"]),
       };
@@ -358,24 +531,62 @@ function buildEvents(params: {
   project: ProjectSeed;
 }) {
   const events: SeededEvent[] = [];
+  const counts = createEmptyEventCounts();
+  const sessionStats: SessionStats = {
+    purchaseSessions: 0,
+    abandonedCartSessions: 0,
+    checkoutAbandonedSessions: 0,
+  };
+  let sessionCounter = 0;
 
-  for (const [eventName, count] of Object.entries(params.project.eventCounts) as [
-    EventName,
-    number,
-  ][]) {
-    for (let index = 0; index < count; index += 1) {
-      events.push({
-        name: eventName,
-        properties: eventProperties(params.project, eventName),
-        userId: params.userId,
-        projectId: params.projectId,
-        apiKeyId: params.apiKeyId,
-        createdAt: createdAtFor(params.project.name, eventName),
-      });
+  for (let customerIndex = 1; customerIndex <= params.project.customerCount; customerIndex += 1) {
+    const customerId = formatSequenceId(params.project.customerPrefix, customerIndex, 4);
+    const sessionCount = getSessionCountForCustomer();
+
+    for (let sessionIndex = 0; sessionIndex < sessionCount; sessionIndex += 1) {
+      sessionCounter += 1;
+
+      const sessionId = formatSequenceId(params.project.sessionPrefix, sessionCounter, 6);
+      const journeyType = pickJourneyType(params.project.journeyWeights);
+      const journey = buildJourney(params.project, journeyType);
+      const context = createJourneyContext(params.project, customerId, sessionId);
+      const sessionStartedAt = createdAtForSession(params.project.name, journey);
+
+      if (journeyType === "successful_purchase") {
+        sessionStats.purchaseSessions += 1;
+      }
+
+      if (journeyType === "cart_abandonment") {
+        sessionStats.abandonedCartSessions += 1;
+      }
+
+      if (journeyType === "checkout_abandonment") {
+        sessionStats.checkoutAbandonedSessions += 1;
+      }
+
+      for (const [eventIndex, eventName] of journey.entries()) {
+        counts[eventName] += 1;
+        events.push({
+          name: eventName,
+          properties: eventProperties(params.project, eventName, context),
+          userId: params.userId,
+          projectId: params.projectId,
+          apiKeyId: params.apiKeyId,
+          createdAt: new Date(
+            sessionStartedAt.getTime() + eventIndex * Math.floor(30_000 + rng() * 150_000),
+          ),
+        });
+      }
     }
   }
 
-  return events.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return {
+    events: events.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+    counts,
+    customerCount: params.project.customerCount,
+    sessionCount: sessionCounter,
+    sessionStats,
+  };
 }
 
 async function resetDemoProjects(userId: string) {
@@ -509,9 +720,12 @@ async function main() {
   const projectSummaries: {
     projectName: string;
     apiKeyName: string;
+    customerCount: number;
+    sessionCount: number;
     totalEvents: number;
     counts: Record<EventName, number>;
     funnel: ReturnType<typeof summarizeFunnel>;
+    sessionStats: SessionStats;
   }[] = [];
 
   for (const projectSeed of DEMO_PROJECTS) {
@@ -547,7 +761,7 @@ async function main() {
       },
     });
 
-    const events = buildEvents({
+    const seedRun = buildEvents({
       userId: user.id,
       projectId: project.id,
       apiKeyId: apiKey.id,
@@ -555,7 +769,7 @@ async function main() {
     });
 
     await prisma.event.createMany({
-      data: events,
+      data: seedRun.events,
     });
 
     apiKeySecrets.push({
@@ -566,14 +780,37 @@ async function main() {
     projectSummaries.push({
       projectName: project.name,
       apiKeyName: apiKey.name,
-      totalEvents: events.length,
-      counts: projectSeed.eventCounts,
-      funnel: summarizeFunnel(events),
+      customerCount: seedRun.customerCount,
+      sessionCount: seedRun.sessionCount,
+      totalEvents: seedRun.events.length,
+      counts: seedRun.counts,
+      funnel: summarizeFunnel(seedRun.events),
+      sessionStats: seedRun.sessionStats,
     });
   }
 
+  const totalCustomers = projectSummaries.reduce(
+    (sum, project) => sum + project.customerCount,
+    0,
+  );
+  const totalSessions = projectSummaries.reduce(
+    (sum, project) => sum + project.sessionCount,
+    0,
+  );
   const totalEvents = projectSummaries.reduce(
     (sum, project) => sum + project.totalEvents,
+    0,
+  );
+  const totalPurchaseSessions = projectSummaries.reduce(
+    (sum, project) => sum + project.sessionStats.purchaseSessions,
+    0,
+  );
+  const totalAbandonedCartSessions = projectSummaries.reduce(
+    (sum, project) => sum + project.sessionStats.abandonedCartSessions,
+    0,
+  );
+  const totalCheckoutAbandonedSessions = projectSummaries.reduce(
+    (sum, project) => sum + project.sessionStats.checkoutAbandonedSessions,
     0,
   );
 
@@ -593,6 +830,8 @@ async function main() {
   for (const summary of projectSummaries) {
     console.log(`\n- ${summary.projectName}`);
     console.log(`  API key: ${summary.apiKeyName}`);
+    console.log(`  Customers generated: ${summary.customerCount}`);
+    console.log(`  Sessions generated: ${summary.sessionCount}`);
     console.log(`  Total events: ${summary.totalEvents}`);
     console.log("  Event counts:");
     for (const [name, count] of Object.entries(summary.counts)) {
@@ -604,11 +843,22 @@ async function main() {
     console.log(`    Checkout Started: ${summary.funnel.checkoutStarted}`);
     console.log(`    Purchase Completed: ${summary.funnel.purchaseCompleted}`);
     console.log(`    Payment Failed: ${summary.funnel.paymentFailed}`);
+    console.log("  Session outcomes:");
+    console.log(`    Approx purchase sessions: ${summary.sessionStats.purchaseSessions}`);
+    console.log(`    Approx abandoned cart sessions: ${summary.sessionStats.abandonedCartSessions}`);
+    console.log(
+      `    Approx checkout abandoned sessions: ${summary.sessionStats.checkoutAbandonedSessions}`,
+    );
   }
 
   console.log(`\nProjects created: ${projectSummaries.length}`);
   console.log(`API keys created: ${apiKeySecrets.length}`);
+  console.log(`Total customers generated: ${totalCustomers}`);
+  console.log(`Total sessions generated: ${totalSessions}`);
   console.log(`Total events inserted: ${totalEvents}`);
+  console.log(`Approx purchase sessions: ${totalPurchaseSessions}`);
+  console.log(`Approx abandoned cart sessions: ${totalAbandonedCartSessions}`);
+  console.log(`Approx checkout abandoned sessions: ${totalCheckoutAbandonedSessions}`);
   console.log("\nGenerated API key secrets are local demo only:");
   for (const secret of apiKeySecrets) {
     console.log(`- ${secret.projectName}: ${secret.rawApiKey} (${secret.maskedKey})`);
