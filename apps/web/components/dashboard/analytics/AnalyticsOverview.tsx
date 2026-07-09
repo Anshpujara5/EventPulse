@@ -17,6 +17,7 @@ import { HealthCard } from "./HealthCard";
 import { InsightsCard } from "./InsightsCard";
 import { PreviousPeriodCard } from "./PreviousPeriodCard";
 import { RecentActivityCard } from "./RecentActivityCard";
+import { SessionFunnelCard } from "./SessionFunnelCard";
 import { ShopperSummaryCard } from "./ShopperSummaryCard";
 import { TopEventsCard } from "./TopEventsCard";
 import { TopPropertiesCard } from "./TopPropertiesCard";
@@ -166,8 +167,10 @@ export function AnalyticsOverview() {
             <InsightsCard insights={state.data.insights} />
           </section>
 
-          {/* Headline commerce section — aggregate funnel over the same scope */}
-          <section className="mt-4">
+          {/* Two funnels, same scope: Session Funnel counts distinct shopper
+              sessions; Commerce Funnel counts raw events. */}
+          <section className="mt-4 grid gap-4 xl:grid-cols-2">
+            <SessionFunnelCard funnel={state.data.sessionFunnel} />
             <CommerceFunnelCard funnel={state.data.commerceFunnel} />
           </section>
 

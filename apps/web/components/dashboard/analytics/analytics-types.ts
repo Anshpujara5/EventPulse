@@ -136,6 +136,46 @@ export interface ShopperSummary {
   purchasingSessions: number;
 }
 
+// Session-based funnel — counts distinct shopper sessions per stage, as
+// opposed to CommerceFunnel which counts raw events.
+export interface SessionFunnelStep {
+  id: CommerceFunnelStepId;
+  label: string;
+  sessions: number;
+  conversionFromFirstPercent: number | null;
+  conversionFromPreviousPercent: number | null;
+  dropOffFromPreviousPercent: number | null;
+  abandonedFromPrevious: number | null;
+}
+
+export interface SessionFunnelAbandonment {
+  viewedNotCarted: number;
+  cartedNotCheckout: number;
+  checkoutNotPurchased: number;
+}
+
+export type SessionFunnelInsightType =
+  | "healthy"
+  | "view_to_cart_drop"
+  | "cart_to_checkout_drop"
+  | "checkout_to_purchase_drop"
+  | "no_session_data";
+
+export interface SessionFunnelInsight {
+  type: SessionFunnelInsightType;
+  severity: InsightSeverity;
+  title: string;
+  description: string;
+}
+
+export interface SessionFunnel {
+  label: string;
+  totalSessions: number;
+  steps: SessionFunnelStep[];
+  abandonment: SessionFunnelAbandonment;
+  insight: SessionFunnelInsight;
+}
+
 export interface AnalyticsData {
   summary: AnalyticsSummary;
   trend: EventTrend;
@@ -147,5 +187,6 @@ export interface AnalyticsData {
   comparison: PeriodComparison;
   health: AnalyticsHealth;
   commerceFunnel: CommerceFunnel;
+  sessionFunnel: SessionFunnel;
   shopperSummary: ShopperSummary;
 }
