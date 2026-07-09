@@ -24,7 +24,7 @@ export function EventsEmptyState() {
   https://your-api/api/events/ingest \\
   -H "Authorization: Bearer ep_live_xxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"add_to_cart","properties":{"product_id":"sku_123","cart_value":499}}'`}
+  -d '{"name":"add_to_cart","customerId":"customer_001","sessionId":"session_001","properties":{"product_id":"sku_123","cart_value":499}}'`}
           </pre>
         </div>
 

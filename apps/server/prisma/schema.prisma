@@ -69,9 +69,18 @@ model Event {
   idempotencyKey String?
   ipAddress      String?
   userAgent      String?
+  // Shopper identity: customerId is the store's customer/shopper, sessionId is
+  // one shopping visit. Nullable in the DB because rows ingested before these
+  // columns existed have no values — but the ingestion API requires both for
+  // all new events.
+  customerId     String?
+  sessionId      String?
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([projectId, createdAt(sort: Desc)])
+  @@index([projectId, customerId])
+  @@index([projectId, sessionId])
+  @@index([projectId, sessionId, createdAt])
   // Enforces per-API-key idempotency at the DB level (NULLs don't collide,
   // so events without an idempotency key are unaffected).
   @@unique([apiKeyId, idempotencyKey])

@@ -65,6 +65,9 @@ type SeededEvent = {
   projectId: string;
   apiKeyId: string;
   createdAt: Date;
+  // Top-level shopper identity, matching the ingestion API standard.
+  customerId: string;
+  sessionId: string;
 };
 
 type JourneyContext = {
@@ -185,6 +188,7 @@ const RESET_PROJECT_NAMES = [
   "Project B",
   "Test Project",
   "NoViews Store",
+  "Session Test Store",
 ];
 
 function getSeedUserEmail(): string | undefined {
@@ -410,15 +414,11 @@ function createJourneyContext(project: ProjectSeed, customerId: string, sessionI
 }
 
 function eventProperties(project: ProjectSeed, eventName: EventName, context: JourneyContext) {
-  const baseProperties = {
-    customer_id: context.customerId,
-    session_id: context.sessionId,
-  };
-
+  // customerId/sessionId now live top-level on the Event row (matching the
+  // ingestion API standard), so they are no longer duplicated into properties.
   switch (eventName) {
     case "product_viewed":
       return {
-        ...baseProperties,
         product_id: context.product.id,
         product_name: context.product.name,
         category: context.product.category,
@@ -431,7 +431,6 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
       };
     case "add_to_cart":
       return {
-        ...baseProperties,
         product_id: context.product.id,
         cart_value: context.cartValue,
         quantity: Math.max(1, Math.floor(rng() * 4) + 1),
@@ -439,7 +438,6 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
       };
     case "checkout_started":
       return {
-        ...baseProperties,
         cart_value: context.cartValue,
         cart_size: context.cartSize,
         delivery_fee: context.deliveryFee,
@@ -448,7 +446,6 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
     case "purchase_completed":
     case "payment_completed":
       return {
-        ...baseProperties,
         order_id: context.orderId,
         amount: context.cartValue,
         currency: project.currency,
@@ -457,14 +454,12 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
       };
     case "payment_failed":
       return {
-        ...baseProperties,
         amount: context.cartValue,
         payment_method: context.paymentMethod,
         reason: pick(["card_declined", "insufficient_funds", "gateway_timeout", "wallet_auth_failed"]),
       };
     case "item_out_of_stock":
       return {
-        ...baseProperties,
         product_id: context.product.id,
         product_name: context.product.name,
         category: context.product.category,
@@ -472,7 +467,6 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
       };
     case "item_unavailable":
       return {
-        ...baseProperties,
         product_id: context.product.id,
         product_name: context.product.name,
         category: context.product.category,
@@ -480,28 +474,24 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
       };
     case "delivery_fee_shown":
       return {
-        ...baseProperties,
         cart_value: context.cartValue,
         delivery_fee: context.deliveryFee,
         free_delivery_threshold: project.name === "QuickCart Grocery" ? 35 : 50,
       };
     case "eta_shown":
       return {
-        ...baseProperties,
         eta_minutes: context.etaMinutes,
         city: pick(["Mumbai", "Bengaluru", "Delhi", "Pune", "Hyderabad"]),
         fulfillment_mode: pick(["instant", "scheduled", "express"]),
       };
     case "coupon_applied":
       return {
-        ...baseProperties,
         coupon_code: pick(["WELCOME10", "SAVE15", "FRESH20", "STYLE25"]),
         discount_amount: money(4 + rng() * 24),
         cart_value: context.cartValue,
       };
     case "remove_from_cart":
       return {
-        ...baseProperties,
         product_id: context.product.id,
         product_name: context.product.name,
         category: context.product.category,
@@ -510,14 +500,12 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
       };
     case "search_performed":
       return {
-        ...baseProperties,
         query: pick(project.products).name.toLowerCase(),
         results_count: Math.floor(4 + rng() * 80),
         source: project.source,
       };
     case "category_viewed":
       return {
-        ...baseProperties,
         category: pick(project.categories),
         source: pick(["home_nav", "search", "recommendation", "promo_tile"]),
       };
@@ -572,6 +560,8 @@ function buildEvents(params: {
           userId: params.userId,
           projectId: params.projectId,
           apiKeyId: params.apiKeyId,
+          customerId,
+          sessionId,
           createdAt: new Date(
             sessionStartedAt.getTime() + eventIndex * Math.floor(30_000 + rng() * 150_000),
           ),

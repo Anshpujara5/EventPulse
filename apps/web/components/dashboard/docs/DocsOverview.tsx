@@ -11,6 +11,8 @@ const INGEST_ENDPOINT = `${API_BASE}/api/events/ingest`;
 
 const SAMPLE_BODY = `{
   "name": "product_viewed",
+  "customerId": "customer_001",
+  "sessionId": "session_001",
   "properties": {
     "product_id": "sku_123",
     "product_name": "Organic Apples",
@@ -24,13 +26,13 @@ const SAMPLE_BODY = `{
 const SAMPLE_CURL = `curl -X POST ${INGEST_ENDPOINT} \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"product_viewed","properties":{"product_id":"sku_123","category":"Grocery","price":129}}'`;
+  -d '{"name":"product_viewed","customerId":"customer_001","sessionId":"session_001","properties":{"product_id":"sku_123","category":"Grocery","price":129}}'`;
 
 const IDEMPOTENCY_CURL = `curl -X POST ${INGEST_ENDPOINT} \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: purchase-ord_123" \\
-  -d '{"name":"purchase_completed","properties":{"order_id":"ord_123","amount":1299,"currency":"INR"}}'`;
+  -d '{"name":"purchase_completed","customerId":"customer_001","sessionId":"session_001","properties":{"order_id":"ord_123","amount":1299,"currency":"INR"}}'`;
 
 // Recommended commerce event names — used consistently across the funnel and
 // friction analytics. Free-form names still work; these just line up with the
@@ -58,6 +60,8 @@ const COMMERCE_EXAMPLES: { title: string; body: string }[] = [
     title: "add_to_cart",
     body: `{
   "name": "add_to_cart",
+  "customerId": "customer_001",
+  "sessionId": "session_001",
   "properties": {
     "product_id": "sku_123",
     "cart_value": 499,
@@ -70,6 +74,8 @@ const COMMERCE_EXAMPLES: { title: string; body: string }[] = [
     title: "checkout_started",
     body: `{
   "name": "checkout_started",
+  "customerId": "customer_001",
+  "sessionId": "session_001",
   "properties": {
     "cart_value": 1299,
     "cart_size": 5,
@@ -82,6 +88,8 @@ const COMMERCE_EXAMPLES: { title: string; body: string }[] = [
     title: "purchase_completed",
     body: `{
   "name": "purchase_completed",
+  "customerId": "customer_001",
+  "sessionId": "session_001",
   "properties": {
     "order_id": "ord_123",
     "amount": 1299,
@@ -94,6 +102,8 @@ const COMMERCE_EXAMPLES: { title: string; body: string }[] = [
     title: "payment_failed",
     body: `{
   "name": "payment_failed",
+  "customerId": "customer_001",
+  "sessionId": "session_001",
   "properties": {
     "amount": 1299,
     "payment_method": "upi",
@@ -105,6 +115,8 @@ const COMMERCE_EXAMPLES: { title: string; body: string }[] = [
     title: "item_out_of_stock",
     body: `{
   "name": "item_out_of_stock",
+  "customerId": "customer_001",
+  "sessionId": "session_001",
   "properties": {
     "product_id": "sku_456",
     "product_name": "Milk 1L",
@@ -120,7 +132,7 @@ const ERROR_RESPONSES: { code: string; label: string; detail: string }[] = [
     code: "400",
     label: "Invalid payload",
     detail:
-      "Missing or empty name, name over 120 characters, or properties that aren't a plain JSON object.",
+      "Missing or empty name/customerId/sessionId, values over 120 characters, or properties that aren't a plain JSON object.",
   },
   {
     code: "401",
@@ -218,7 +230,11 @@ export function DocsOverview() {
           {SAMPLE_BODY}
         </pre>
         <p className="mt-2 text-xs text-slate-500">
-          <span className="font-bold text-slate-400">name</span> is required.{" "}
+          <span className="font-bold text-slate-400">name</span>,{" "}
+          <span className="font-bold text-slate-400">customerId</span> (your
+          store&apos;s shopper id), and{" "}
+          <span className="font-bold text-slate-400">sessionId</span> (one
+          shopping visit) are required.{" "}
           <span className="font-bold text-slate-400">properties</span> is
           optional and must be a plain JSON object.
         </p>

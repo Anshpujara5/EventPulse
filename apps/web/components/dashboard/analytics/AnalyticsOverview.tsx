@@ -17,6 +17,7 @@ import { HealthCard } from "./HealthCard";
 import { InsightsCard } from "./InsightsCard";
 import { PreviousPeriodCard } from "./PreviousPeriodCard";
 import { RecentActivityCard } from "./RecentActivityCard";
+import { ShopperSummaryCard } from "./ShopperSummaryCard";
 import { TopEventsCard } from "./TopEventsCard";
 import { TopPropertiesCard } from "./TopPropertiesCard";
 
@@ -154,6 +155,10 @@ export function AnalyticsOverview() {
             summary={state.data.summary}
             scopeLabel={scopeLabel}
           />
+
+          <section className="mt-4">
+            <ShopperSummaryCard summary={state.data.shopperSummary} />
+          </section>
 
           <section className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
             <PreviousPeriodCard comparison={state.data.comparison} />

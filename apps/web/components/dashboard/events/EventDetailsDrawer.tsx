@@ -55,6 +55,8 @@ export function EventDetailsDrawer({
     ["API Key", event.apiKeyName ?? "—"],
     ["Key Prefix", event.keyPrefix ?? "—"],
     ["Received", formatDate(event.createdAt)],
+    ["Customer ID", event.customerId ?? "—"],
+    ["Session ID", event.sessionId ?? "—"],
     ["IP Address", event.ipAddress ?? "—"],
     ["User Agent", event.userAgent ?? "—"],
   ];

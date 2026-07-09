@@ -23,6 +23,8 @@ interface EventRow {
   createdAt: Date;
   ipAddress?: string | null;
   userAgent?: string | null;
+  customerId?: string | null;
+  sessionId?: string | null;
   // joined fields from project / apiKey
   projectName?: string;
   projectDomain?: string;
@@ -47,6 +49,9 @@ const MAX_EVENT_NAME_LENGTH = 120;
 // the whole body at its default 100kb). No extra libraries required.
 const MAX_PROPERTIES_BYTES = 16 * 1024;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 200;
+// Shopper identifiers (customerId/sessionId) share the same shape rules as
+// event names: trimmed, non-empty, capped, no control characters.
+const MAX_SHOPPER_ID_LENGTH = 120;
 // Reject control characters (newlines, tabs, null, etc.) in event names while
 // still allowing names like page_view, checkout.completed, user-signup.
 function hasControlChars(value: string): boolean {
@@ -57,6 +62,39 @@ function hasControlChars(value: string): boolean {
     }
   }
   return false;
+}
+
+// Required shopper identifier (customerId / sessionId). Returns the trimmed
+// value, or an error message describing exactly which rule failed.
+function validateShopperId(
+  value: unknown,
+  field: "customerId" | "sessionId",
+): { value: string; error: null } | { value: null; error: string } {
+  if (typeof value !== "string") {
+    return { value: null, error: `${field} is required and must be a string` };
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return { value: null, error: `${field} must not be empty` };
+  }
+
+  if (trimmed.length > MAX_SHOPPER_ID_LENGTH) {
+    return {
+      value: null,
+      error: `${field} must be between 1 and ${MAX_SHOPPER_ID_LENGTH} characters`,
+    };
+  }
+
+  if (hasControlChars(trimmed)) {
+    return {
+      value: null,
+      error: `${field} must not contain control characters`,
+    };
+  }
+
+  return { value: trimmed, error: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +169,19 @@ export async function ingestEventController(req: Request, res: Response) {
     }
 
     // 4. Validate body
-    const { name, properties, idempotencyKey: bodyIdempotencyKey } =
-      req.body as {
-        name: unknown;
-        properties: unknown;
-        idempotencyKey?: unknown;
-      };
+    const {
+      name,
+      properties,
+      customerId: rawCustomerId,
+      sessionId: rawSessionId,
+      idempotencyKey: bodyIdempotencyKey,
+    } = req.body as {
+      name: unknown;
+      properties: unknown;
+      customerId?: unknown;
+      sessionId?: unknown;
+      idempotencyKey?: unknown;
+    };
 
     if (typeof name !== "string") {
       return res.status(400).json({
@@ -167,6 +212,27 @@ export async function ingestEventController(req: Request, res: Response) {
         message: "Event name must not contain control characters",
       });
     }
+
+    // customerId/sessionId are required for all new events (the DB columns are
+    // nullable only so rows ingested before these fields existed stay valid).
+    const customerIdResult = validateShopperId(rawCustomerId, "customerId");
+    if (customerIdResult.error !== null) {
+      return res.status(400).json({
+        success: false,
+        message: customerIdResult.error,
+      });
+    }
+
+    const sessionIdResult = validateShopperId(rawSessionId, "sessionId");
+    if (sessionIdResult.error !== null) {
+      return res.status(400).json({
+        success: false,
+        message: sessionIdResult.error,
+      });
+    }
+
+    const customerId = customerIdResult.value;
+    const sessionId = sessionIdResult.value;
 
     if (
       properties !== undefined &&
@@ -206,9 +272,12 @@ export async function ingestEventController(req: Request, res: Response) {
     // original event instead of creating a duplicate.
     if (idempotencyKey) {
       const [existing] = await prisma.$queryRaw<
-        Pick<EventRow, "id" | "name" | "projectId" | "createdAt">[]
+        Pick<
+          EventRow,
+          "id" | "name" | "projectId" | "createdAt" | "customerId" | "sessionId"
+        >[]
       >`
-        SELECT id, name, "projectId", "createdAt"
+        SELECT id, name, "projectId", "createdAt", "customerId", "sessionId"
         FROM "Event"
         WHERE "apiKeyId" = ${apiKeyRow.id} AND "idempotencyKey" = ${idempotencyKey}
         LIMIT 1
@@ -223,6 +292,8 @@ export async function ingestEventController(req: Request, res: Response) {
             name: existing.name,
             projectId: existing.projectId,
             createdAt: existing.createdAt,
+            customerId: existing.customerId ?? null,
+            sessionId: existing.sessionId ?? null,
           },
         });
       }
@@ -247,7 +318,7 @@ export async function ingestEventController(req: Request, res: Response) {
 
     try {
       await prisma.$executeRaw`
-        INSERT INTO "Event" (id, name, properties, "userId", "projectId", "apiKeyId", "createdAt", "idempotencyKey", "ipAddress", "userAgent")
+        INSERT INTO "Event" (id, name, properties, "userId", "projectId", "apiKeyId", "createdAt", "idempotencyKey", "ipAddress", "userAgent", "customerId", "sessionId")
         VALUES (
           ${eventId},
           ${eventName},
@@ -258,7 +329,9 @@ export async function ingestEventController(req: Request, res: Response) {
           NOW(),
           ${idempotencyKey ?? null},
           ${ipAddress},
-          ${userAgent}
+          ${userAgent},
+          ${customerId},
+          ${sessionId}
         )
       `;
     } catch (error) {
@@ -274,9 +347,12 @@ export async function ingestEventController(req: Request, res: Response) {
 
       if (idempotencyKey && isUniqueViolation) {
         const [existing] = await prisma.$queryRaw<
-          Pick<EventRow, "id" | "name" | "projectId" | "createdAt">[]
+          Pick<
+            EventRow,
+            "id" | "name" | "projectId" | "createdAt" | "customerId" | "sessionId"
+          >[]
         >`
-          SELECT id, name, "projectId", "createdAt"
+          SELECT id, name, "projectId", "createdAt", "customerId", "sessionId"
           FROM "Event"
           WHERE "apiKeyId" = ${apiKeyRow.id} AND "idempotencyKey" = ${idempotencyKey}
           LIMIT 1
@@ -290,6 +366,8 @@ export async function ingestEventController(req: Request, res: Response) {
               name: existing.name,
               projectId: existing.projectId,
               createdAt: existing.createdAt,
+              customerId: existing.customerId ?? null,
+              sessionId: existing.sessionId ?? null,
             },
           });
         }
@@ -315,9 +393,12 @@ export async function ingestEventController(req: Request, res: Response) {
 
     // 10. Return minimal event confirmation
     const [createdEvent] = await prisma.$queryRaw<
-      Pick<EventRow, "id" | "name" | "projectId" | "createdAt">[]
+      Pick<
+        EventRow,
+        "id" | "name" | "projectId" | "createdAt" | "customerId" | "sessionId"
+      >[]
     >`
-      SELECT id, name, "projectId", "createdAt"
+      SELECT id, name, "projectId", "createdAt", "customerId", "sessionId"
       FROM "Event"
       WHERE id = ${eventId}
     `;
@@ -330,6 +411,8 @@ export async function ingestEventController(req: Request, res: Response) {
         name: createdEvent.name,
         projectId: createdEvent.projectId,
         createdAt: createdEvent.createdAt,
+        customerId: createdEvent.customerId ?? null,
+        sessionId: createdEvent.sessionId ?? null,
       },
     });
   } catch (error) {
@@ -381,7 +464,7 @@ export async function getEventsController(req: AuthRequest, res: Response) {
     const events = await prisma.$queryRaw<EventRow[]>`
       SELECT
         e.id, e.name, e.properties, e."userId", e."projectId", e."apiKeyId", e."createdAt",
-        e."ipAddress", e."userAgent",
+        e."ipAddress", e."userAgent", e."customerId", e."sessionId",
         p.name AS "projectName", p.domain AS "projectDomain",
         a.name AS "apiKeyName", a."keyPrefix"
       FROM "Event" e

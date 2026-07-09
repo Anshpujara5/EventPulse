@@ -202,6 +202,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const ingestEndpoint = `${API_BASE}/api/events/ingest`;
   const sampleBody = `{
   "name": "product_viewed",
+  "customerId": "customer_001",
+  "sessionId": "session_001",
   "properties": {
     "product_id": "sku_123",
     "category": "Grocery",
@@ -211,7 +213,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const sampleCurl = `curl -X POST ${ingestEndpoint} \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"product_viewed","properties":{"product_id":"sku_123","category":"Grocery","price":129}}'`;
+  -d '{"name":"product_viewed","customerId":"customer_001","sessionId":"session_001","properties":{"product_id":"sku_123","category":"Grocery","price":129}}'`;
 
   const summaryCards = [
     {

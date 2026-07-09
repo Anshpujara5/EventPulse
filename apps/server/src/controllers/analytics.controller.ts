@@ -49,6 +49,12 @@ interface PeriodComparisonRow {
   previous: bigint;
 }
 
+interface ShopperSummaryRow {
+  uniqueCustomers: bigint;
+  uniqueSessions: bigint;
+  purchasingSessions: bigint;
+}
+
 type TrendGranularity = "hour" | "day" | "month";
 
 // ---------------------------------------------------------------------------
@@ -831,6 +837,7 @@ export async function getAnalyticsSummaryController(
       periodComparison,
       totalActiveProjectsResult,
       commerceCountRows,
+      shopperSummaryResult,
     ] = await Promise.all([
       // Total events matching the current project + range scope
       prisma.$queryRaw<CountRow[]>`
@@ -957,6 +964,28 @@ export async function getAnalyticsSummaryController(
         AND LOWER(name) IN (${Prisma.join(ALL_COMMERCE_ALIASES)})
         GROUP BY LOWER(name)
       `,
+
+      // Shopper/session summary. COUNT(DISTINCT col) skips NULLs, so rows
+      // ingested before customerId/sessionId existed simply don't count —
+      // no ipAddress/userAgent identity guessing.
+      prisma.$queryRaw<ShopperSummaryRow[]>`
+        SELECT
+          COUNT(DISTINCT "customerId") AS "uniqueCustomers",
+          COUNT(DISTINCT "sessionId") AS "uniqueSessions",
+          COUNT(DISTINCT "sessionId") FILTER (
+            WHERE LOWER(name) IN (
+              'purchase_completed',
+              'payment_completed',
+              'order_completed',
+              'checkout_completed',
+              'checkout.completed'
+            )
+          ) AS "purchasingSessions"
+        FROM "Event"
+        WHERE "userId" = ${userId}
+        ${projFilter}
+        ${rangeFilter}
+      `,
     ]);
 
     const scopedTotal = Number(totalResult[0]?.count ?? 0);
@@ -1058,6 +1087,13 @@ export async function getAnalyticsSummaryController(
         comparison,
         health,
         commerceFunnel,
+        shopperSummary: {
+          uniqueCustomers: Number(shopperSummaryResult[0]?.uniqueCustomers ?? 0),
+          uniqueSessions: Number(shopperSummaryResult[0]?.uniqueSessions ?? 0),
+          purchasingSessions: Number(
+            shopperSummaryResult[0]?.purchasingSessions ?? 0,
+          ),
+        },
       },
     });
   } catch (error) {

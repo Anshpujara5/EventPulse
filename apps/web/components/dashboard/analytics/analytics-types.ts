@@ -130,6 +130,12 @@ export interface CommerceFunnel {
   insight: CommerceFunnelInsight;
 }
 
+export interface ShopperSummary {
+  uniqueCustomers: number;
+  uniqueSessions: number;
+  purchasingSessions: number;
+}
+
 export interface AnalyticsData {
   summary: AnalyticsSummary;
   trend: EventTrend;
@@ -141,4 +147,5 @@ export interface AnalyticsData {
   comparison: PeriodComparison;
   health: AnalyticsHealth;
   commerceFunnel: CommerceFunnel;
+  shopperSummary: ShopperSummary;
 }

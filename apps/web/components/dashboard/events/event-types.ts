@@ -12,6 +12,8 @@ export interface EventRecord {
   keyPrefix?: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  customerId?: string | null;
+  sessionId?: string | null;
 }
 
 export interface EventSummary {
