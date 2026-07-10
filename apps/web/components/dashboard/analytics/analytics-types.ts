@@ -136,6 +136,43 @@ export interface ShopperSummary {
   purchasingSessions: number;
 }
 
+export interface ProductStat {
+  projectId: string;
+  projectName: string;
+  productId: string;
+  productName: string | null;
+  viewSessions: number;
+  cartSessions: number;
+  sessionsThatPurchased: number;
+  viewToPurchasePercent: number | null;
+  cartToPurchasePercent: number | null;
+  unitsAddedToCart: number;
+  gmv: number | null;
+  currency: string | null;
+}
+
+export interface CategoryStat {
+  projectId: string;
+  projectName: string;
+  category: string;
+  viewSessions: number;
+  cartSessions: number;
+  sessionsThatPurchased: number;
+  viewToPurchasePercent: number | null;
+  cartToPurchasePercent: number | null;
+  unitsAddedToCart: number;
+  gmv: number | null;
+  currency: string | null;
+}
+
+export interface ProductPerformance {
+  hasProductData: boolean;
+  products: ProductStat[];
+  highViewLowPurchase: ProductStat[];
+  highCartLowPurchase: ProductStat[];
+  categories: CategoryStat[];
+}
+
 // Session-based funnel — counts distinct shopper sessions per stage, as
 // opposed to CommerceFunnel which counts raw events.
 export interface SessionFunnelStep {
@@ -188,5 +225,6 @@ export interface AnalyticsData {
   health: AnalyticsHealth;
   commerceFunnel: CommerceFunnel;
   sessionFunnel: SessionFunnel;
+  productPerformance: ProductPerformance;
   shopperSummary: ShopperSummary;
 }

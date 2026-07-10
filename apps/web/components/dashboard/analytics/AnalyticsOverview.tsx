@@ -10,12 +10,14 @@ import type { AnalyticsData } from "./analytics-types";
 import { AnalyticsEmptyState } from "./AnalyticsEmptyState";
 import { AnalyticsMetricCards } from "./AnalyticsMetricCards";
 import { AnalyticsRefreshBar } from "./AnalyticsRefreshBar";
+import { CategoryPerformanceCard } from "./CategoryPerformanceCard";
 import { CommerceFunnelCard } from "./CommerceFunnelCard";
 import { EventsByProjectCard } from "./EventsByProjectCard";
 import { EventTrendChart } from "./HourlyTrendChart";
 import { HealthCard } from "./HealthCard";
 import { InsightsCard } from "./InsightsCard";
 import { PreviousPeriodCard } from "./PreviousPeriodCard";
+import { ProductPerformanceCard } from "./ProductPerformanceCard";
 import { RecentActivityCard } from "./RecentActivityCard";
 import { SessionFunnelCard } from "./SessionFunnelCard";
 import { ShopperSummaryCard } from "./ShopperSummaryCard";
@@ -172,6 +174,15 @@ export function AnalyticsOverview() {
           <section className="mt-4 grid gap-4 xl:grid-cols-2">
             <SessionFunnelCard funnel={state.data.sessionFunnel} />
             <CommerceFunnelCard funnel={state.data.commerceFunnel} />
+          </section>
+
+          <section className="mt-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <ProductPerformanceCard
+              performance={state.data.productPerformance}
+            />
+            <CategoryPerformanceCard
+              categories={state.data.productPerformance.categories}
+            />
           </section>
 
           <section className="mt-4">
