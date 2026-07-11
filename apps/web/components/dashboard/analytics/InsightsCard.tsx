@@ -31,7 +31,9 @@ export function InsightsCard({ insights }: { insights: AnalyticsInsight[] }) {
           <Icon name="spark" className="size-5" />
         </div>
         <div>
-          <h2 className="text-lg font-black text-white">Key Insights</h2>
+          <h2 className="text-lg font-black text-white">
+            Automated Commerce Insights
+          </h2>
           <p className="text-xs text-slate-500">
             Rule-based signals computed from your real event data.
           </p>

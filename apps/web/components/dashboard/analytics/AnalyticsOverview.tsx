@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import {
   ALL_PROJECTS_ID,
   TIME_RANGE_OPTIONS,
@@ -8,21 +8,17 @@ import {
 } from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import type { AnalyticsData } from "./analytics-types";
 import { AnalyticsEmptyState } from "./AnalyticsEmptyState";
-import { AnalyticsMetricCards } from "./AnalyticsMetricCards";
 import { AnalyticsRefreshBar } from "./AnalyticsRefreshBar";
-import { CategoryPerformanceCard } from "./CategoryPerformanceCard";
-import { CommerceFunnelCard } from "./CommerceFunnelCard";
-import { EventsByProjectCard } from "./EventsByProjectCard";
-import { EventTrendChart } from "./HourlyTrendChart";
-import { HealthCard } from "./HealthCard";
-import { InsightsCard } from "./InsightsCard";
-import { PreviousPeriodCard } from "./PreviousPeriodCard";
-import { ProductPerformanceCard } from "./ProductPerformanceCard";
-import { RecentActivityCard } from "./RecentActivityCard";
-import { SessionFunnelCard } from "./SessionFunnelCard";
-import { ShopperSummaryCard } from "./ShopperSummaryCard";
-import { TopEventsCard } from "./TopEventsCard";
-import { TopPropertiesCard } from "./TopPropertiesCard";
+import {
+  AnalyticsTabs,
+  AnalyticsTabsFallback,
+} from "./tabs/AnalyticsTabs";
+import { BehaviorTab } from "./tabs/BehaviorTab";
+import { ConversionTab } from "./tabs/ConversionTab";
+import { OverviewTab } from "./tabs/OverviewTab";
+import { ProductsTab } from "./tabs/ProductsTab";
+import { SalesTab } from "./tabs/SalesTab";
+import { ShoppersTab } from "./tabs/ShoppersTab";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
@@ -153,52 +149,43 @@ export function AnalyticsOverview() {
 
       {/* Real data */}
       {state.status === "success" && !isEmpty && (
-        <>
-          <AnalyticsMetricCards
-            summary={state.data.summary}
-            scopeLabel={scopeLabel}
+        <Suspense fallback={<AnalyticsTabsFallback />}>
+          <AnalyticsTabs
+            panels={{
+              overview: (
+                <OverviewTab
+                  comparison={state.data.comparison}
+                  health={state.data.health}
+                  insights={state.data.insights}
+                  scopeLabel={scopeLabel}
+                  summary={state.data.summary}
+                  trend={state.data.trend}
+                />
+              ),
+              conversion: (
+                <ConversionTab
+                  commerceFunnel={state.data.commerceFunnel}
+                  sessionFunnel={state.data.sessionFunnel}
+                />
+              ),
+              sales: <SalesTab />,
+              products: (
+                <ProductsTab performance={state.data.productPerformance} />
+              ),
+              shoppers: (
+                <ShoppersTab summary={state.data.shopperSummary} />
+              ),
+              behavior: (
+                <BehaviorTab
+                  eventsByProject={state.data.eventsByProject}
+                  recentActivity={state.data.recentActivity}
+                  topEvents={state.data.topEvents}
+                  topProperties={state.data.topProperties}
+                />
+              ),
+            }}
           />
-
-          <section className="mt-4">
-            <ShopperSummaryCard summary={state.data.shopperSummary} />
-          </section>
-
-          <section className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
-            <PreviousPeriodCard comparison={state.data.comparison} />
-            <HealthCard health={state.data.health} />
-            <InsightsCard insights={state.data.insights} />
-          </section>
-
-          {/* Two funnels, same scope: Session Funnel counts distinct shopper
-              sessions; Commerce Funnel counts raw events. */}
-          <section className="mt-4 grid gap-4 xl:grid-cols-2">
-            <SessionFunnelCard funnel={state.data.sessionFunnel} />
-            <CommerceFunnelCard funnel={state.data.commerceFunnel} />
-          </section>
-
-          <section className="mt-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <ProductPerformanceCard
-              performance={state.data.productPerformance}
-            />
-            <CategoryPerformanceCard
-              categories={state.data.productPerformance.categories}
-            />
-          </section>
-
-          <section className="mt-4">
-            <EventTrendChart trend={state.data.trend} />
-          </section>
-
-          <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr_1.2fr]">
-            <TopEventsCard events={state.data.topEvents} />
-            <EventsByProjectCard projects={state.data.eventsByProject} />
-            <RecentActivityCard events={state.data.recentActivity} />
-          </section>
-
-          <section className="mt-4">
-            <TopPropertiesCard properties={state.data.topProperties} />
-          </section>
-        </>
+        </Suspense>
       )}
     </div>
   );
