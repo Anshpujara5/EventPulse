@@ -1,6 +1,5 @@
 import type { CommerceFunnel, SessionFunnel } from "../analytics-types";
-import { CommerceFunnelCard } from "../CommerceFunnelCard";
-import { SessionFunnelCard } from "../SessionFunnelCard";
+import { ConversionFunnelCard } from "../ConversionFunnelCard";
 
 export function ConversionTab({
   sessionFunnel,
@@ -10,9 +9,11 @@ export function ConversionTab({
   commerceFunnel: CommerceFunnel;
 }) {
   return (
-    <section className="mt-5 grid gap-4 xl:grid-cols-2">
-      <SessionFunnelCard funnel={sessionFunnel} />
-      <CommerceFunnelCard funnel={commerceFunnel} />
+    <section className="mt-5">
+      <ConversionFunnelCard
+        commerceFunnel={commerceFunnel}
+        sessionFunnel={sessionFunnel}
+      />
     </section>
   );
 }
