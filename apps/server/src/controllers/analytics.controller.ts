@@ -1,12 +1,9 @@
 import { Prisma } from "@prisma/client";
 import type { Response } from "express";
+import { createAnalyticsScope } from "../analytics/analyticsScope";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
-import {
-  parseCustomDateRange,
-  rangeToInterval,
-  type TimeRangeToken,
-} from "../utils/timeRange";
+import type { TimeRangeToken } from "../utils/timeRange";
 
 // ---------------------------------------------------------------------------
 // Row types for typed raw queries
@@ -124,27 +121,6 @@ const DOMINANCE_THRESHOLD_PCT = 50;
 const ANOMALY_RATIO_THRESHOLD = 3;
 const CRITICAL_ANOMALY_RATIO = 6;
 const MAX_INSIGHTS = 5;
-
-// Period-over-period comparison window per range token — "all time" compares
-// the most recent 7 days against the 7 days before that, since there's no
-// natural fixed window to compare against otherwise.
-const PERIOD_COMPARISON_LOOKBACK: Record<
-  TimeRangeToken,
-  { current: string; previous: string }
-> = {
-  "24h": { current: "24 hours", previous: "48 hours" },
-  "7d": { current: "7 days", previous: "14 days" },
-  "30d": { current: "30 days", previous: "60 days" },
-  all: { current: "7 days", previous: "14 days" },
-};
-
-// Matches the windows above — used for the "Previous Period" comparison label.
-const PERIOD_COMPARISON_LABEL: Record<TimeRangeToken, string> = {
-  "24h": "previous 24 hours",
-  "7d": "previous 7 days",
-  "30d": "previous 30 days",
-  all: "previous 7 days",
-};
 
 const FLAT_CHANGE_THRESHOLD_PCT = 5;
 
@@ -933,6 +909,11 @@ const FIXED_RANGE_SPECS: Record<Exclude<TimeRangeToken, "all">, FixedRangeSpec> 
   "30d": { granularity: "day", lookback: "29 days", step: "1 day" },
 };
 
+function customTrendGranularity(dayCount: number): TrendGranularity {
+  if (dayCount === 1) return "hour";
+  return dayCount <= ALL_TIME_MONTHLY_THRESHOLD_DAYS ? "day" : "month";
+}
+
 function buildInsights(params: {
   scopedTotal: number;
   projectId: string | null;
@@ -1106,71 +1087,33 @@ export async function getAnalyticsSummaryController(
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const userId = req.user.userId;
+    const scopeResult = createAnalyticsScope({
+      userId: req.user.userId,
+      projectId: req.query.projectId,
+      range: req.query.range,
+      from: req.query.from,
+      to: req.query.to,
+    });
 
-    // Optional project scope from the header project selector. Uses parameterised
-    // Prisma SQL fragments (never string concatenation) so it stays injection-safe.
-    const projectId =
-      typeof req.query.projectId === "string" && req.query.projectId
-        ? req.query.projectId
-        : null;
-    const projFilter = projectId
-      ? Prisma.sql`AND "projectId" = ${projectId}`
-      : Prisma.empty;
-    const projFilterE = projectId
-      ? Prisma.sql`AND e."projectId" = ${projectId}`
-      : Prisma.empty;
-
-    // Optional time-range scope from the header time-range selector. Scopes the
-    // summary total, unique-name count, active-project count, and every
-    // breakdown below. "Events today" stays a fixed since-midnight window
-    // regardless of range, matching how the events page treats "today".
-    const customRangeResult =
-      req.query.range === "custom"
-        ? parseCustomDateRange(req.query.from, req.query.to)
-        : null;
-
-    if (customRangeResult && !customRangeResult.valid) {
+    if (!scopeResult.valid) {
       return res.status(400).json({
         success: false,
-        message: customRangeResult.message,
+        message: scopeResult.message,
       });
     }
 
-    const customRange = customRangeResult?.valid
-      ? customRangeResult.value
-      : null;
-    const rangeToken: TimeRangeToken =
-      req.query.range === "24h" ||
-      req.query.range === "7d" ||
-      req.query.range === "30d"
-        ? req.query.range
-        : "all";
-    const rangeInterval = rangeToInterval(rangeToken);
-    const rangeFilter = customRange
-      ? Prisma.sql`AND "createdAt" >= ${customRange.from}::date
-          AND "createdAt" < (${customRange.to}::date + INTERVAL '1 day')`
-      : rangeInterval
-        ? Prisma.sql`AND "createdAt" >= NOW() - ${rangeInterval}::interval`
-        : Prisma.empty;
-    const rangeFilterE = customRange
-      ? Prisma.sql`AND e."createdAt" >= ${customRange.from}::date
-          AND e."createdAt" < (${customRange.to}::date + INTERVAL '1 day')`
-      : rangeInterval
-        ? Prisma.sql`AND e."createdAt" >= NOW() - ${rangeInterval}::interval`
-        : Prisma.empty;
+    const scope = scopeResult.value;
 
     // "All time" trend granularity depends on the real data span (day buckets
     // for up to 60 days of history, monthly beyond that). Measured in whole
     // calendar days via a plain date subtraction so it's not affected by
     // client/server timezone parsing.
     let allTimeGranularity: TrendGranularity | null = null;
-    if (!customRange && rangeToken === "all") {
+    if (scope.range.isAllTime) {
       const [spanRow] = await prisma.$queryRaw<SpanRow[]>`
         SELECT (CURRENT_DATE - MIN("createdAt")::date) AS "spanDays"
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
+        WHERE ${scope.sql.ownedEvent}
       `;
       if (spanRow?.spanDays !== null && spanRow?.spanDays !== undefined) {
         allTimeGranularity =
@@ -1178,36 +1121,31 @@ export async function getAnalyticsSummaryController(
       }
     }
 
-    const customTrendGranularity: TrendGranularity | null = customRange
-      ? customRange.dayCount === 1
-        ? "hour"
-        : customRange.dayCount <= ALL_TIME_MONTHLY_THRESHOLD_DAYS
-          ? "day"
-          : "month"
-      : null;
-    const trendGranularity: TrendGranularity | null = customTrendGranularity
-      ? customTrendGranularity
-      : rangeToken === "all"
+    const trendGranularity: TrendGranularity | null = scope.range.isCustom
+      ? customTrendGranularity(scope.range.dayCount)
+      : scope.range.key === "all"
         ? allTimeGranularity
-        : FIXED_RANGE_SPECS[rangeToken].granularity;
+        : FIXED_RANGE_SPECS[scope.range.key].granularity;
 
     function buildTrendQuery() {
-      if (customRange && customTrendGranularity) {
+      if (scope.range.isCustom) {
+        const customRange = scope.range.custom;
+        const granularity = customTrendGranularity(scope.range.dayCount);
         const step =
-          customTrendGranularity === "hour"
+          granularity === "hour"
             ? "1 hour"
-            : customTrendGranularity === "day"
+            : granularity === "day"
               ? "1 day"
               : "1 month";
         const endBucket =
-          customTrendGranularity === "hour"
+          granularity === "hour"
             ? Prisma.sql`(${customRange.to}::date + INTERVAL '23 hours')`
-            : Prisma.sql`date_trunc(${customTrendGranularity}, ${customRange.to}::date)`;
+            : Prisma.sql`date_trunc(${granularity}, ${customRange.to}::date)`;
 
         return prisma.$queryRaw<TrendPointRow[]>`
           WITH buckets AS (
             SELECT generate_series(
-              date_trunc(${customTrendGranularity}, ${customRange.from}::date),
+              date_trunc(${granularity}, ${customRange.from}::date),
               ${endBucket},
               ${step}::interval
             ) AS bucket
@@ -1217,17 +1155,14 @@ export async function getAnalyticsSummaryController(
             COALESCE(COUNT(e.id), 0) AS count
           FROM buckets b
           LEFT JOIN "Event" e
-            ON date_trunc(${customTrendGranularity}, e."createdAt") = b.bucket
-            AND e."userId" = ${userId}
-            AND e."createdAt" >= ${customRange.from}::date
-            AND e."createdAt" < (${customRange.to}::date + INTERVAL '1 day')
-            ${projFilterE}
+            ON date_trunc(${granularity}, e."createdAt") = b.bucket
+            AND ${scope.sql.currentAliasedEvent}
           GROUP BY b.bucket
           ORDER BY b.bucket ASC
         `;
       }
 
-      if (rangeToken === "all") {
+      if (scope.range.key === "all") {
         if (!allTimeGranularity) {
           return Promise.resolve([] as TrendPointRow[]);
         }
@@ -1238,8 +1173,7 @@ export async function getAnalyticsSummaryController(
               date_trunc(${allTimeGranularity}, MIN("createdAt")) AS "start",
               date_trunc(${allTimeGranularity}, NOW()) AS "end"
             FROM "Event"
-            WHERE "userId" = ${userId}
-            ${projFilter}
+            WHERE ${scope.sql.ownedEvent}
           ),
           buckets AS (
             SELECT generate_series(bounds."start", bounds."end", ${step}::interval) AS bucket
@@ -1251,14 +1185,13 @@ export async function getAnalyticsSummaryController(
           FROM buckets b
           LEFT JOIN "Event" e
             ON date_trunc(${allTimeGranularity}, e."createdAt") = b.bucket
-            AND e."userId" = ${userId}
-            ${projFilterE}
+            AND ${scope.sql.ownedAliasedEvent}
           GROUP BY b.bucket
           ORDER BY b.bucket ASC
         `;
       }
 
-      const spec = FIXED_RANGE_SPECS[rangeToken];
+      const spec = FIXED_RANGE_SPECS[scope.range.key];
       return prisma.$queryRaw<TrendPointRow[]>`
         WITH buckets AS (
           SELECT generate_series(
@@ -1273,42 +1206,19 @@ export async function getAnalyticsSummaryController(
         FROM buckets b
         LEFT JOIN "Event" e
           ON date_trunc(${spec.granularity}, e."createdAt") = b.bucket
-          AND e."userId" = ${userId}
-          ${projFilterE}
+          AND ${scope.sql.ownedAliasedEvent}
         GROUP BY b.bucket
         ORDER BY b.bucket ASC
       `;
     }
 
     function buildPeriodComparisonQuery() {
-      if (customRange) {
-        return prisma.$queryRaw<PeriodComparisonRow[]>`
-          SELECT
-            COUNT(*) FILTER (
-              WHERE "createdAt" >= ${customRange.from}::date
-                AND "createdAt" < (${customRange.to}::date + INTERVAL '1 day')
-            ) AS current,
-            COUNT(*) FILTER (
-              WHERE "createdAt" >= ${customRange.previousFrom}::date
-                AND "createdAt" < ${customRange.from}::date
-            ) AS previous
-          FROM "Event"
-          WHERE "userId" = ${userId}
-          ${projFilter}
-        `;
-      }
-
-      const periodLookback = PERIOD_COMPARISON_LOOKBACK[rangeToken];
       return prisma.$queryRaw<PeriodComparisonRow[]>`
         SELECT
-          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - ${periodLookback.current}::interval) AS current,
-          COUNT(*) FILTER (
-            WHERE "createdAt" >= NOW() - ${periodLookback.previous}::interval
-              AND "createdAt" < NOW() - ${periodLookback.current}::interval
-          ) AS previous
+          COUNT(*) FILTER (WHERE ${scope.sql.comparisonCurrentRange}) AS current,
+          COUNT(*) FILTER (WHERE ${scope.sql.comparisonPreviousRange}) AS previous
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
+        WHERE ${scope.sql.ownedEvent}
       `;
     }
 
@@ -1334,9 +1244,7 @@ export async function getAnalyticsSummaryController(
       prisma.$queryRaw<CountRow[]>`
         SELECT COUNT(*) AS count
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
-        ${rangeFilter}
+        WHERE ${scope.sql.currentEvent}
       `,
 
       // Events today (since midnight, DB session timezone) — fixed window,
@@ -1344,36 +1252,28 @@ export async function getAnalyticsSummaryController(
       prisma.$queryRaw<CountRow[]>`
         SELECT COUNT(*) AS count
         FROM "Event"
-        WHERE "userId" = ${userId}
-          AND "createdAt" >= CURRENT_DATE
-        ${projFilter}
+        WHERE ${scope.sql.todayEvent}
       `,
 
       // Unique event names within the current scope
       prisma.$queryRaw<CountRow[]>`
         SELECT COUNT(DISTINCT name) AS count
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
-        ${rangeFilter}
+        WHERE ${scope.sql.currentEvent}
       `,
 
       // Distinct projects with events within the current scope
       prisma.$queryRaw<CountRow[]>`
         SELECT COUNT(DISTINCT "projectId") AS count
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
-        ${rangeFilter}
+        WHERE ${scope.sql.currentEvent}
       `,
 
       // Top 10 event names by count
       prisma.$queryRaw<TopEventRow[]>`
         SELECT name, COUNT(*) AS count
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
-        ${rangeFilter}
+        WHERE ${scope.sql.currentEvent}
         GROUP BY name
         ORDER BY count DESC
         LIMIT 10
@@ -1384,9 +1284,7 @@ export async function getAnalyticsSummaryController(
         SELECT e."projectId", p.name AS "projectName", COUNT(*) AS count
         FROM "Event" e
         JOIN "Project" p ON p.id = e."projectId"
-        WHERE e."userId" = ${userId}
-        ${projFilterE}
-        ${rangeFilterE}
+        WHERE ${scope.sql.currentAliasedEvent}
         GROUP BY e."projectId", p.name
         ORDER BY count DESC
         LIMIT 10
@@ -1397,9 +1295,7 @@ export async function getAnalyticsSummaryController(
         SELECT e.id, e.name, p.name AS "projectName", e."createdAt"
         FROM "Event" e
         JOIN "Project" p ON p.id = e."projectId"
-        WHERE e."userId" = ${userId}
-        ${projFilterE}
-        ${rangeFilterE}
+        WHERE ${scope.sql.currentAliasedEvent}
         ORDER BY e."createdAt" DESC
         LIMIT 10
       `,
@@ -1409,9 +1305,7 @@ export async function getAnalyticsSummaryController(
       prisma.$queryRaw<PropertyKeyRow[]>`
         SELECT key, COUNT(*) AS count
         FROM "Event" e, jsonb_object_keys(e.properties) AS key
-        WHERE e."userId" = ${userId}
-        ${projFilterE}
-        ${rangeFilterE}
+        WHERE ${scope.sql.currentAliasedEvent}
         GROUP BY key
         ORDER BY count DESC
         LIMIT 10
@@ -1425,12 +1319,12 @@ export async function getAnalyticsSummaryController(
 
       // Total ACTIVE projects owned by the user, for the inactive-project
       // insight. Only meaningful for the all-projects scope.
-      projectId
+      scope.projectId
         ? Promise.resolve([] as CountRow[])
         : prisma.$queryRaw<CountRow[]>`
             SELECT COUNT(*) AS count
             FROM "Project"
-            WHERE "userId" = ${userId} AND status = 'ACTIVE'
+            WHERE ${scope.sql.ownedProject} AND status = 'ACTIVE'
           `,
 
       // Commerce funnel + friction counts, grouped by lowered event name so
@@ -1439,9 +1333,7 @@ export async function getAnalyticsSummaryController(
       prisma.$queryRaw<TopEventRow[]>`
         SELECT LOWER(name) AS name, COUNT(*) AS count
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
-        ${rangeFilter}
+        WHERE ${scope.sql.currentEvent}
         AND LOWER(name) IN (${Prisma.join(ALL_COMMERCE_ALIASES)})
         GROUP BY LOWER(name)
       `,
@@ -1463,9 +1355,7 @@ export async function getAnalyticsSummaryController(
             )
           ) AS "purchasingSessions"
         FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
-        ${rangeFilter}
+        WHERE ${scope.sql.currentEvent}
       `,
 
       // Session-based funnel: distinct sessions that reached each stage. Only
@@ -1487,10 +1377,8 @@ export async function getAnalyticsSummaryController(
             WHERE LOWER(name) IN (${Prisma.join([...SESSION_FUNNEL_STEPS[3].aliases])})
           ) AS "purchaseCompleted"
         FROM "Event"
-        WHERE "userId" = ${userId}
+        WHERE ${scope.sql.currentEvent}
           AND "sessionId" IS NOT NULL
-        ${projFilter}
-        ${rangeFilter}
       `,
 
       // Product performance: one row per project-scoped product identity.
@@ -1523,10 +1411,8 @@ export async function getAnalyticsSummaryController(
             END AS quantity
           FROM "Event" e
           JOIN "Project" p ON p.id = e."projectId"
-          WHERE e."userId" = ${userId}
+          WHERE ${scope.sql.currentAliasedEvent}
             AND e."sessionId" IS NOT NULL
-          ${projFilterE}
-          ${rangeFilterE}
         ),
         product_sessions AS (
           SELECT
@@ -1633,10 +1519,8 @@ export async function getAnalyticsSummaryController(
             END AS quantity
           FROM "Event" e
           JOIN "Project" p ON p.id = e."projectId"
-          WHERE e."userId" = ${userId}
+          WHERE ${scope.sql.currentAliasedEvent}
             AND e."sessionId" IS NOT NULL
-          ${projFilterE}
-          ${rangeFilterE}
         ),
         category_sessions AS (
           SELECT
@@ -1721,12 +1605,7 @@ export async function getAnalyticsSummaryController(
     // Average events per day across the scoped window.
     let avgEventsPerDay = 0;
     if (scopedTotal > 0) {
-      let days: number;
-      if (customRange) days = customRange.dayCount;
-      else if (rangeToken === "24h") days = 1;
-      else if (rangeToken === "7d") days = 7;
-      else if (rangeToken === "30d") days = 30;
-      else days = Math.max(1, trendPoints.length);
+      const days = scope.range.dayCount ?? Math.max(1, trendPoints.length);
       avgEventsPerDay = Math.round((scopedTotal / days) * 10) / 10;
     }
 
@@ -1748,35 +1627,28 @@ export async function getAnalyticsSummaryController(
 
     const insights = buildInsights({
       scopedTotal,
-      projectId,
+      projectId: scope.projectId,
       periodComparison: periodComparison[0],
       trendPoints: mappedTrendPoints,
       topEvents: mappedTopEvents,
       eventsByProject: mappedEventsByProject,
       activeProjectsWithEvents: Number(activeProjectsResult[0]?.count ?? 0),
-      totalActiveProjects: projectId
+      totalActiveProjects: scope.projectId
         ? null
         : Number(totalActiveProjectsResult[0]?.count ?? 0),
     });
 
-    const comparisonPeriodLabel = customRange
-      ? `previous ${customRange.dayCount} ${
-          customRange.dayCount === 1 ? "day" : "days"
-        }`
-      : PERIOD_COMPARISON_LABEL[rangeToken];
     const comparison = buildComparison(
       periodComparison[0],
-      comparisonPeriodLabel,
+      scope.comparison.label,
     );
 
     const health = buildHealth({
       scopedTotal,
       eventsToday: Number(todayResult[0]?.count ?? 0),
       uniqueEventNames: Number(uniqueNamesResult[0]?.count ?? 0),
-      checkTodayActivity: customRange
-        ? customRange.includesToday
-        : rangeToken !== "all",
-      projectId,
+      checkTodayActivity: scope.checkTodayActivity,
+      projectId: scope.projectId,
       topEvent: mappedTopEvents[0],
       topProject: mappedEventsByProject[0],
       comparisonDirection: comparison.direction,

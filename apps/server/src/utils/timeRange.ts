@@ -6,6 +6,7 @@ export type TimeRangeToken = "24h" | "7d" | "30d" | "all";
 export interface CustomDateRange {
   from: string;
   to: string;
+  endExclusive: string;
   previousFrom: string;
   dayCount: number;
   includesToday: boolean;
@@ -90,12 +91,16 @@ export function parseCustomDateRange(
   const previousFromDate = new Date(
     fromDate.getTime() - dayCount * MILLISECONDS_PER_DAY,
   );
+  const endExclusiveDate = new Date(
+    toDate.getTime() + MILLISECONDS_PER_DAY,
+  );
 
   return {
     valid: true,
     value: {
       from,
       to,
+      endExclusive: endExclusiveDate.toISOString().slice(0, 10),
       previousFrom: previousFromDate.toISOString().slice(0, 10),
       dayCount,
       includesToday: to === today,
