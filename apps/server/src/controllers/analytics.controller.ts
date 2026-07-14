@@ -2,7 +2,11 @@ import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
-import { rangeToInterval, type TimeRangeToken } from "../utils/timeRange";
+import {
+  parseCustomDateRange,
+  rangeToInterval,
+  type TimeRangeToken,
+} from "../utils/timeRange";
 
 // ---------------------------------------------------------------------------
 // Row types for typed raw queries
@@ -148,7 +152,7 @@ type ComparisonDirection = "up" | "down" | "flat" | "new" | "no_data";
 
 function buildComparison(
   periodComparison: PeriodComparisonRow | undefined,
-  rangeToken: TimeRangeToken,
+  comparisonPeriodLabel: string,
 ) {
   const currentPeriodEvents = Number(periodComparison?.current ?? 0);
   const previousPeriodEvents = Number(periodComparison?.previous ?? 0);
@@ -173,7 +177,7 @@ function buildComparison(
     previousPeriodEvents,
     changePercent,
     direction,
-    label: `Compared with ${PERIOD_COMPARISON_LABEL[rangeToken]}`,
+    label: `Compared with ${comparisonPeriodLabel}`,
   };
 }
 
@@ -198,7 +202,7 @@ function buildHealth(params: {
   scopedTotal: number;
   eventsToday: number;
   uniqueEventNames: number;
-  rangeToken: TimeRangeToken;
+  checkTodayActivity: boolean;
   projectId: string | null;
   topEvent: { percentage: number } | undefined;
   topProject: { percentage: number } | undefined;
@@ -210,7 +214,7 @@ function buildHealth(params: {
     scopedTotal,
     eventsToday,
     uniqueEventNames,
-    rangeToken,
+    checkTodayActivity,
     projectId,
     topEvent,
     topProject,
@@ -240,7 +244,7 @@ function buildHealth(params: {
     reasons.push("Most events are coming from one project.");
   }
 
-  if (eventsToday === 0 && rangeToken !== "all") {
+  if (eventsToday === 0 && checkTodayActivity) {
     score -= 20;
     reasons.push("No events received today.");
   }
@@ -1121,6 +1125,21 @@ export async function getAnalyticsSummaryController(
     // summary total, unique-name count, active-project count, and every
     // breakdown below. "Events today" stays a fixed since-midnight window
     // regardless of range, matching how the events page treats "today".
+    const customRangeResult =
+      req.query.range === "custom"
+        ? parseCustomDateRange(req.query.from, req.query.to)
+        : null;
+
+    if (customRangeResult && !customRangeResult.valid) {
+      return res.status(400).json({
+        success: false,
+        message: customRangeResult.message,
+      });
+    }
+
+    const customRange = customRangeResult?.valid
+      ? customRangeResult.value
+      : null;
     const rangeToken: TimeRangeToken =
       req.query.range === "24h" ||
       req.query.range === "7d" ||
@@ -1128,19 +1147,25 @@ export async function getAnalyticsSummaryController(
         ? req.query.range
         : "all";
     const rangeInterval = rangeToInterval(rangeToken);
-    const rangeFilter = rangeInterval
-      ? Prisma.sql`AND "createdAt" >= NOW() - ${rangeInterval}::interval`
-      : Prisma.empty;
-    const rangeFilterE = rangeInterval
-      ? Prisma.sql`AND e."createdAt" >= NOW() - ${rangeInterval}::interval`
-      : Prisma.empty;
+    const rangeFilter = customRange
+      ? Prisma.sql`AND "createdAt" >= ${customRange.from}::date
+          AND "createdAt" < (${customRange.to}::date + INTERVAL '1 day')`
+      : rangeInterval
+        ? Prisma.sql`AND "createdAt" >= NOW() - ${rangeInterval}::interval`
+        : Prisma.empty;
+    const rangeFilterE = customRange
+      ? Prisma.sql`AND e."createdAt" >= ${customRange.from}::date
+          AND e."createdAt" < (${customRange.to}::date + INTERVAL '1 day')`
+      : rangeInterval
+        ? Prisma.sql`AND e."createdAt" >= NOW() - ${rangeInterval}::interval`
+        : Prisma.empty;
 
     // "All time" trend granularity depends on the real data span (day buckets
     // for up to 60 days of history, monthly beyond that). Measured in whole
     // calendar days via a plain date subtraction so it's not affected by
     // client/server timezone parsing.
     let allTimeGranularity: TrendGranularity | null = null;
-    if (rangeToken === "all") {
+    if (!customRange && rangeToken === "all") {
       const [spanRow] = await prisma.$queryRaw<SpanRow[]>`
         SELECT (CURRENT_DATE - MIN("createdAt")::date) AS "spanDays"
         FROM "Event"
@@ -1153,10 +1178,55 @@ export async function getAnalyticsSummaryController(
       }
     }
 
-    const trendGranularity: TrendGranularity | null =
-      rangeToken === "all" ? allTimeGranularity : FIXED_RANGE_SPECS[rangeToken].granularity;
+    const customTrendGranularity: TrendGranularity | null = customRange
+      ? customRange.dayCount === 1
+        ? "hour"
+        : customRange.dayCount <= ALL_TIME_MONTHLY_THRESHOLD_DAYS
+          ? "day"
+          : "month"
+      : null;
+    const trendGranularity: TrendGranularity | null = customTrendGranularity
+      ? customTrendGranularity
+      : rangeToken === "all"
+        ? allTimeGranularity
+        : FIXED_RANGE_SPECS[rangeToken].granularity;
 
     function buildTrendQuery() {
+      if (customRange && customTrendGranularity) {
+        const step =
+          customTrendGranularity === "hour"
+            ? "1 hour"
+            : customTrendGranularity === "day"
+              ? "1 day"
+              : "1 month";
+        const endBucket =
+          customTrendGranularity === "hour"
+            ? Prisma.sql`(${customRange.to}::date + INTERVAL '23 hours')`
+            : Prisma.sql`date_trunc(${customTrendGranularity}, ${customRange.to}::date)`;
+
+        return prisma.$queryRaw<TrendPointRow[]>`
+          WITH buckets AS (
+            SELECT generate_series(
+              date_trunc(${customTrendGranularity}, ${customRange.from}::date),
+              ${endBucket},
+              ${step}::interval
+            ) AS bucket
+          )
+          SELECT
+            TO_CHAR(b.bucket, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS bucket,
+            COALESCE(COUNT(e.id), 0) AS count
+          FROM buckets b
+          LEFT JOIN "Event" e
+            ON date_trunc(${customTrendGranularity}, e."createdAt") = b.bucket
+            AND e."userId" = ${userId}
+            AND e."createdAt" >= ${customRange.from}::date
+            AND e."createdAt" < (${customRange.to}::date + INTERVAL '1 day')
+            ${projFilterE}
+          GROUP BY b.bucket
+          ORDER BY b.bucket ASC
+        `;
+      }
+
       if (rangeToken === "all") {
         if (!allTimeGranularity) {
           return Promise.resolve([] as TrendPointRow[]);
@@ -1210,7 +1280,37 @@ export async function getAnalyticsSummaryController(
       `;
     }
 
-    const periodLookback = PERIOD_COMPARISON_LOOKBACK[rangeToken];
+    function buildPeriodComparisonQuery() {
+      if (customRange) {
+        return prisma.$queryRaw<PeriodComparisonRow[]>`
+          SELECT
+            COUNT(*) FILTER (
+              WHERE "createdAt" >= ${customRange.from}::date
+                AND "createdAt" < (${customRange.to}::date + INTERVAL '1 day')
+            ) AS current,
+            COUNT(*) FILTER (
+              WHERE "createdAt" >= ${customRange.previousFrom}::date
+                AND "createdAt" < ${customRange.from}::date
+            ) AS previous
+          FROM "Event"
+          WHERE "userId" = ${userId}
+          ${projFilter}
+        `;
+      }
+
+      const periodLookback = PERIOD_COMPARISON_LOOKBACK[rangeToken];
+      return prisma.$queryRaw<PeriodComparisonRow[]>`
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - ${periodLookback.current}::interval) AS current,
+          COUNT(*) FILTER (
+            WHERE "createdAt" >= NOW() - ${periodLookback.previous}::interval
+              AND "createdAt" < NOW() - ${periodLookback.current}::interval
+          ) AS previous
+        FROM "Event"
+        WHERE "userId" = ${userId}
+        ${projFilter}
+      `;
+    }
 
     const [
       totalResult,
@@ -1321,17 +1421,7 @@ export async function getAnalyticsSummaryController(
       buildTrendQuery(),
 
       // Current vs previous period totals, for growth/drop insights
-      prisma.$queryRaw<PeriodComparisonRow[]>`
-        SELECT
-          COUNT(*) FILTER (WHERE "createdAt" >= NOW() - ${periodLookback.current}::interval) AS current,
-          COUNT(*) FILTER (
-            WHERE "createdAt" >= NOW() - ${periodLookback.previous}::interval
-              AND "createdAt" < NOW() - ${periodLookback.current}::interval
-          ) AS previous
-        FROM "Event"
-        WHERE "userId" = ${userId}
-        ${projFilter}
-      `,
+      buildPeriodComparisonQuery(),
 
       // Total ACTIVE projects owned by the user, for the inactive-project
       // insight. Only meaningful for the all-projects scope.
@@ -1632,7 +1722,8 @@ export async function getAnalyticsSummaryController(
     let avgEventsPerDay = 0;
     if (scopedTotal > 0) {
       let days: number;
-      if (rangeToken === "24h") days = 1;
+      if (customRange) days = customRange.dayCount;
+      else if (rangeToken === "24h") days = 1;
       else if (rangeToken === "7d") days = 7;
       else if (rangeToken === "30d") days = 30;
       else days = Math.max(1, trendPoints.length);
@@ -1668,13 +1759,23 @@ export async function getAnalyticsSummaryController(
         : Number(totalActiveProjectsResult[0]?.count ?? 0),
     });
 
-    const comparison = buildComparison(periodComparison[0], rangeToken);
+    const comparisonPeriodLabel = customRange
+      ? `previous ${customRange.dayCount} ${
+          customRange.dayCount === 1 ? "day" : "days"
+        }`
+      : PERIOD_COMPARISON_LABEL[rangeToken];
+    const comparison = buildComparison(
+      periodComparison[0],
+      comparisonPeriodLabel,
+    );
 
     const health = buildHealth({
       scopedTotal,
       eventsToday: Number(todayResult[0]?.count ?? 0),
       uniqueEventNames: Number(uniqueNamesResult[0]?.count ?? 0),
-      rangeToken,
+      checkTodayActivity: customRange
+        ? customRange.includesToday
+        : rangeToken !== "all",
       projectId,
       topEvent: mappedTopEvents[0],
       topProject: mappedEventsByProject[0],

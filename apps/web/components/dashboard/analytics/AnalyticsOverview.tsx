@@ -1,11 +1,14 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   ALL_PROJECTS_ID,
   TIME_RANGE_OPTIONS,
   useDashboardHeaderState,
 } from "@/components/dashboard/layout/header/DashboardHeaderContext";
+import { apiRequest } from "@/lib/api";
+import { validateAnalyticsDateRange } from "@/lib/analyticsDateRange";
+import { useSearchParams } from "next/navigation";
 import type { AnalyticsData } from "./analytics-types";
 import { AnalyticsEmptyState } from "./AnalyticsEmptyState";
 import { AnalyticsRefreshBar } from "./AnalyticsRefreshBar";
@@ -20,80 +23,152 @@ import { ProductsTab } from "./tabs/ProductsTab";
 import { SalesTab } from "./tabs/SalesTab";
 import { ShoppersTab } from "./tabs/ShoppersTab";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
-
 type FetchState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "success"; data: AnalyticsData };
+  | { status: "loading"; scopeKey: string }
+  | { status: "error"; scopeKey: string; message: string }
+  | { status: "success"; scopeKey: string; data: AnalyticsData };
+
+interface AnalyticsResponse {
+  success: boolean;
+  data: AnalyticsData;
+}
 
 export function AnalyticsOverview() {
+  const searchParams = useSearchParams();
   const { selectedProjectId, selectedProject, timeRange } =
     useDashboardHeaderState();
-  const [state, setState] = useState<FetchState>({ status: "loading" });
+  const [state, setState] = useState<FetchState | null>(null);
+  const latestRequestId = useRef(0);
 
-  const timeRangeLabel =
-    TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label ??
-    "All time";
+  const rangeParam = searchParams.get("range");
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+  const customRangeValidation =
+    rangeParam === "custom"
+      ? validateAnalyticsDateRange(fromParam, toParam)
+      : null;
+  const customRange = customRangeValidation?.valid
+    ? customRangeValidation.value
+    : null;
+  const customFrom = customRange?.from ?? null;
+  const customTo = customRange?.to ?? null;
+  const customRangeError =
+    customRangeValidation && !customRangeValidation.valid
+      ? customRangeValidation.message
+      : null;
+
+  const timeRangeLabel = customRange
+    ? customRange.label
+    : rangeParam === "custom"
+      ? "Custom range"
+      : (TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label ??
+        "All time");
   const projectLabel =
     selectedProjectId === ALL_PROJECTS_ID
       ? "All projects"
       : (selectedProject?.name ?? "Selected project");
   const scopeLabel = `${projectLabel} · ${timeRangeLabel}`;
-  const isAllTime = timeRange === "all";
+  const isAllTime = rangeParam !== "custom" && timeRange === "all";
+  const scopeKey = `${selectedProjectId}:${
+    customRange
+      ? `custom:${customRange.from}:${customRange.to}`
+      : rangeParam === "custom"
+        ? `invalid-custom:${fromParam ?? ""}:${toParam ?? ""}`
+        : `preset:${timeRange}`
+  }`;
 
-  const fetchAnalytics = useCallback(async () => {
-    setState({ status: "loading" });
-    try {
-      const token =
-        typeof window !== "undefined"
-          ? localStorage.getItem("eventpulse_token")
-          : null;
+  const requestAnalytics = useCallback(async (): Promise<AnalyticsData> => {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("eventpulse_token")
+        : null;
 
-      const params = new URLSearchParams();
-      // Scope analytics to the globally selected project from the header.
-      if (selectedProjectId && selectedProjectId !== ALL_PROJECTS_ID) {
-        params.set("projectId", selectedProjectId);
-      }
-      // Scope the analytical breakdowns to the header time range.
-      if (timeRange && timeRange !== "all") {
-        params.set("range", timeRange);
-      }
-      const query = params.toString();
-
-      const res = await fetch(
-        `${API_BASE}/api/analytics/summary${query ? `?${query}` : ""}`,
-        {
-          headers: { Authorization: `Bearer ${token ?? ""}` },
-        },
-      );
-
-      if (!res.ok) {
-        const body = (await res.json()) as { message?: string };
-        setState({
-          status: "error",
-          message: body.message ?? "Failed to load analytics",
-        });
-        return;
-      }
-
-      const body = (await res.json()) as {
-        success: boolean;
-        data: AnalyticsData;
-      };
-      setState({ status: "success", data: body.data });
-    } catch {
-      setState({ status: "error", message: "Could not reach server" });
+    const params = new URLSearchParams();
+    if (selectedProjectId && selectedProjectId !== ALL_PROJECTS_ID) {
+      params.set("projectId", selectedProjectId);
     }
-  }, [selectedProjectId, timeRange]);
+    if (customFrom && customTo) {
+      params.set("range", "custom");
+      params.set("from", customFrom);
+      params.set("to", customTo);
+    } else if (timeRange && timeRange !== "all") {
+      params.set("range", timeRange);
+    }
+    const query = params.toString();
+
+    const body = await apiRequest<AnalyticsResponse>(
+      `/api/analytics/summary${query ? `?${query}` : ""}`,
+      {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      },
+    );
+
+    return body.data;
+  }, [customFrom, customTo, selectedProjectId, timeRange]);
 
   useEffect(() => {
-    void fetchAnalytics();
-  }, [fetchAnalytics]);
+    if (customRangeError) {
+      latestRequestId.current += 1;
+      return;
+    }
+
+    const requestId = ++latestRequestId.current;
+    void requestAnalytics()
+      .then((data) => {
+        if (requestId === latestRequestId.current) {
+          setState({ status: "success", scopeKey, data });
+        }
+      })
+      .catch((error: unknown) => {
+        if (requestId === latestRequestId.current) {
+          setState({
+            status: "error",
+            scopeKey,
+            message:
+              error instanceof Error ? error.message : "Could not reach server",
+          });
+        }
+      });
+
+    return () => {
+      latestRequestId.current += 1;
+    };
+  }, [customRangeError, requestAnalytics, scopeKey]);
+
+  const currentState: FetchState = customRangeError
+    ? { status: "error", scopeKey, message: customRangeError }
+    : state?.scopeKey === scopeKey
+      ? state
+      : { status: "loading", scopeKey };
 
   const isEmpty =
-    state.status === "success" && state.data.summary.totalEvents === 0;
+    currentState.status === "success" &&
+    currentState.data.summary.totalEvents === 0;
+
+  function refreshAnalytics() {
+    if (customRangeError) {
+      return;
+    }
+
+    setState({ status: "loading", scopeKey });
+    const requestId = ++latestRequestId.current;
+    void requestAnalytics()
+      .then((data) => {
+        if (requestId === latestRequestId.current) {
+          setState({ status: "success", scopeKey, data });
+        }
+      })
+      .catch((error: unknown) => {
+        if (requestId === latestRequestId.current) {
+          setState({
+            status: "error",
+            scopeKey,
+            message:
+              error instanceof Error ? error.message : "Could not reach server",
+          });
+        }
+      });
+  }
 
   return (
     <div className="mx-auto min-w-0 max-w-[1420px] px-4 py-5 sm:px-6">
@@ -108,8 +183,8 @@ export function AnalyticsOverview() {
           </p>
         </div>
         <AnalyticsRefreshBar
-          loading={state.status === "loading"}
-          onRefresh={() => void fetchAnalytics()}
+          loading={currentState.status === "loading"}
+          onRefresh={refreshAnalytics}
         />
       </div>
 
@@ -121,7 +196,7 @@ export function AnalyticsOverview() {
       </p>
 
       {/* Loading */}
-      {state.status === "loading" && (
+      {currentState.status === "loading" && (
         <div className="mt-8 flex h-64 items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <div className="size-8 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-400" />
@@ -131,16 +206,20 @@ export function AnalyticsOverview() {
       )}
 
       {/* Error */}
-      {state.status === "error" && (
+      {currentState.status === "error" && (
         <div className="mt-8 flex h-64 flex-col items-center justify-center gap-4">
-          <p className="text-rose-400">{state.message}</p>
-          <button
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
-            onClick={() => void fetchAnalytics()}
-            type="button"
-          >
-            Retry
-          </button>
+          <p className="text-center text-rose-400" role="alert">
+            {currentState.message}
+          </p>
+          {!customRangeError ? (
+            <button
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
+              onClick={refreshAnalytics}
+              type="button"
+            >
+              Retry
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -148,39 +227,39 @@ export function AnalyticsOverview() {
       {isEmpty && <AnalyticsEmptyState />}
 
       {/* Real data */}
-      {state.status === "success" && !isEmpty && (
+      {currentState.status === "success" && !isEmpty && (
         <Suspense fallback={<AnalyticsTabsFallback />}>
           <AnalyticsTabs
             panels={{
               overview: (
                 <OverviewTab
-                  comparison={state.data.comparison}
-                  health={state.data.health}
-                  insights={state.data.insights}
+                  comparison={currentState.data.comparison}
+                  health={currentState.data.health}
+                  insights={currentState.data.insights}
                   scopeLabel={scopeLabel}
-                  summary={state.data.summary}
-                  trend={state.data.trend}
+                  summary={currentState.data.summary}
+                  trend={currentState.data.trend}
                 />
               ),
               conversion: (
                 <ConversionTab
-                  commerceFunnel={state.data.commerceFunnel}
-                  sessionFunnel={state.data.sessionFunnel}
+                  commerceFunnel={currentState.data.commerceFunnel}
+                  sessionFunnel={currentState.data.sessionFunnel}
                 />
               ),
               sales: <SalesTab />,
               products: (
-                <ProductsTab performance={state.data.productPerformance} />
+                <ProductsTab performance={currentState.data.productPerformance} />
               ),
               shoppers: (
-                <ShoppersTab summary={state.data.shopperSummary} />
+                <ShoppersTab summary={currentState.data.shopperSummary} />
               ),
               behavior: (
                 <BehaviorTab
-                  eventsByProject={state.data.eventsByProject}
-                  recentActivity={state.data.recentActivity}
-                  topEvents={state.data.topEvents}
-                  topProperties={state.data.topProperties}
+                  eventsByProject={currentState.data.eventsByProject}
+                  recentActivity={currentState.data.recentActivity}
+                  topEvents={currentState.data.topEvents}
+                  topProperties={currentState.data.topProperties}
                 />
               ),
             }}

@@ -3,7 +3,11 @@ import { HeaderAlertButton } from "./header/HeaderAlertButton";
 import { HeaderCreateAlertButton } from "./header/HeaderCreateAlertButton";
 import { HeaderProjectSelector } from "./header/HeaderProjectSelector";
 import { HeaderSearch } from "./header/HeaderSearch";
-import { HeaderTimeRangeSelector } from "./header/HeaderTimeRangeSelector";
+import {
+  HeaderTimeRangeSelector,
+  HeaderTimeRangeSelectorFallback,
+} from "./header/HeaderTimeRangeSelector";
+import { Suspense } from "react";
 
 export function DashboardHeader({
   userEmail,
@@ -18,7 +22,9 @@ export function DashboardHeader({
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <HeaderSearch />
           <HeaderProjectSelector />
-          <HeaderTimeRangeSelector />
+          <Suspense fallback={<HeaderTimeRangeSelectorFallback />}>
+            <HeaderTimeRangeSelector />
+          </Suspense>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-4">
           <HeaderAlertButton />
