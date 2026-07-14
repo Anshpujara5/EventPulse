@@ -7,9 +7,8 @@ import type {
 } from "../analytics-types";
 import { AnalyticsMetricCards } from "../AnalyticsMetricCards";
 import { EventTrendChart } from "../HourlyTrendChart";
-import { HealthCard } from "../HealthCard";
-import { InsightsCard } from "../InsightsCard";
 import { PreviousPeriodCard } from "../PreviousPeriodCard";
+import { TrackingHealthInsightsCard } from "../TrackingHealthInsightsCard";
 
 export function OverviewTab({
   summary,
@@ -30,10 +29,9 @@ export function OverviewTab({
     <>
       <AnalyticsMetricCards summary={summary} scopeLabel={scopeLabel} />
 
-      <section className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
+      <section className="mt-4 grid gap-4 lg:grid-cols-[1fr_2fr]">
         <PreviousPeriodCard comparison={comparison} />
-        <HealthCard health={health} />
-        <InsightsCard insights={insights} />
+        <TrackingHealthInsightsCard health={health} insights={insights} />
       </section>
 
       <section className="mt-4">
