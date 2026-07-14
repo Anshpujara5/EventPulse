@@ -7,7 +7,6 @@ import type {
 } from "../analytics-types";
 import { AnalyticsMetricCards } from "../AnalyticsMetricCards";
 import { EventTrendChart } from "../HourlyTrendChart";
-import { PreviousPeriodCard } from "../PreviousPeriodCard";
 import { TrackingHealthInsightsCard } from "../TrackingHealthInsightsCard";
 
 export function OverviewTab({
@@ -27,10 +26,15 @@ export function OverviewTab({
 }) {
   return (
     <>
-      <AnalyticsMetricCards summary={summary} scopeLabel={scopeLabel} />
+      <AnalyticsMetricCards
+        comparison={
+          scopeLabel.endsWith(" · All time") ? undefined : comparison
+        }
+        scopeLabel={scopeLabel}
+        summary={summary}
+      />
 
-      <section className="mt-4 grid gap-4 lg:grid-cols-[1fr_2fr]">
-        <PreviousPeriodCard comparison={comparison} />
+      <section className="mt-4">
         <TrackingHealthInsightsCard health={health} insights={insights} />
       </section>
 

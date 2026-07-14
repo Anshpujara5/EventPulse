@@ -1,10 +1,10 @@
 import type { ShopperSummary } from "../analytics-types";
-import { ShopperSummaryCard } from "../ShopperSummaryCard";
+import { ShopperKpiRow } from "../ShopperKpiRow";
 
 export function ShoppersTab({ summary }: { summary: ShopperSummary }) {
   return (
-    <section className="mt-5">
-      <ShopperSummaryCard summary={summary} />
-    </section>
+    <div className="mt-5">
+      <ShopperKpiRow summary={summary} />
+    </div>
   );
 }

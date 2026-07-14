@@ -1,6 +1,7 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
-import type { AnalyticsSummary } from "./analytics-types";
+import type { AnalyticsSummary, PeriodComparison } from "./analytics-types";
+import { MetricComparisonChip } from "./MetricComparisonChip";
 
 interface CardDef {
   label: string;
@@ -9,9 +10,14 @@ interface CardDef {
   icon: string;
   tone: string;
   boxClassName: string;
+  comparison?: PeriodComparison;
 }
 
-function buildCards(s: AnalyticsSummary, scopeLabel: string): CardDef[] {
+function buildCards(
+  s: AnalyticsSummary,
+  scopeLabel: string,
+  comparison?: PeriodComparison,
+): CardDef[] {
   return [
     {
       label: "Total Events",
@@ -20,6 +26,7 @@ function buildCards(s: AnalyticsSummary, scopeLabel: string): CardDef[] {
       icon: "pulse",
       tone: "text-blue-400",
       boxClassName: "border-blue-400/25 bg-blue-500/10",
+      comparison,
     },
     {
       label: "Events Today",
@@ -61,24 +68,29 @@ function buildCards(s: AnalyticsSummary, scopeLabel: string): CardDef[] {
 export function AnalyticsMetricCards({
   summary,
   scopeLabel,
+  comparison,
 }: {
   summary: AnalyticsSummary;
   scopeLabel: string;
+  comparison?: PeriodComparison;
 }) {
   return (
     <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-      {buildCards(summary, scopeLabel).map((card) => (
+      {buildCards(summary, scopeLabel, comparison).map((card) => (
         <GlowCard className="p-5" key={card.label}>
           <div className="flex items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-medium text-slate-400">{card.label}</p>
               <p className="mt-3 text-3xl font-black tracking-tight text-white">
                 {card.value}
               </p>
+              {card.comparison && (
+                <MetricComparisonChip comparison={card.comparison} />
+              )}
               <p className="mt-2 text-sm text-slate-500">{card.detail}</p>
             </div>
             <div
-              className={`flex size-12 items-center justify-center rounded-full border ${card.boxClassName} ${card.tone}`}
+              className={`flex size-12 shrink-0 items-center justify-center rounded-full border ${card.boxClassName} ${card.tone}`}
             >
               <Icon name={card.icon} />
             </div>
