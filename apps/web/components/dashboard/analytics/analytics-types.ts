@@ -213,6 +213,45 @@ export interface SessionFunnel {
   insight: SessionFunnelInsight;
 }
 
+// MIRROR: apps/server/src/analytics/summary.ts
+export interface OverviewTabData {
+  summary: AnalyticsSummary;
+  trend: EventTrend;
+  insights: AnalyticsInsight[];
+  comparison: PeriodComparison;
+  health: AnalyticsHealth;
+}
+
+export interface ConversionTabData {
+  commerceFunnel: CommerceFunnel;
+  sessionFunnel: SessionFunnel;
+}
+
+export interface ProductsTabData {
+  productPerformance: ProductPerformance;
+}
+
+export interface ShoppersTabData {
+  shopperSummary: ShopperSummary;
+}
+
+export interface BehaviorTabData {
+  topEvents: TopEvent[];
+  eventsByProject: ProjectEventCount[];
+  recentActivity: RecentEvent[];
+  topProperties: TopProperty[];
+}
+
+export interface AnalyticsTabDataMap {
+  overview: OverviewTabData;
+  conversion: ConversionTabData;
+  products: ProductsTabData;
+  shoppers: ShoppersTabData;
+  behavior: BehaviorTabData;
+}
+
+export type AnalyticsDataTabId = keyof AnalyticsTabDataMap;
+
 export interface AnalyticsData {
   summary: AnalyticsSummary;
   trend: EventTrend;

@@ -16,7 +16,7 @@ export type AnalyticsTabId = (typeof TABS)[number]["id"];
 
 const TAB_IDS = new Set<string>(TABS.map((tab) => tab.id));
 
-function resolveTab(value: string | null): AnalyticsTabId {
+export function resolveAnalyticsTab(value: string | null): AnalyticsTabId {
   return value !== null && TAB_IDS.has(value)
     ? (value as AnalyticsTabId)
     : "overview";
@@ -30,7 +30,7 @@ export function AnalyticsTabs({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = resolveTab(searchParams.get("tab"));
+  const activeTab = resolveAnalyticsTab(searchParams.get("tab"));
 
   function selectTab(tabId: AnalyticsTabId) {
     const params = new URLSearchParams(searchParams.toString());
