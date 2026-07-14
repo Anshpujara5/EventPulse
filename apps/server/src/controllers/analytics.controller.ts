@@ -13,14 +13,16 @@ import {
   type TopEvent,
 } from "../analytics/eventActivity";
 import {
-  ALL_COMMERCE_ALIASES,
-  COMMERCE_FRICTION_ALIASES,
-  COMMERCE_STEPS,
-  PURCHASE_ALIASES,
-  SESSION_FUNNEL_STEPS,
-  type CommerceStepId,
-} from "../analytics/shared/aliases";
+  buildCommerceFunnel,
+  fetchCommerceCounts,
+} from "../analytics/commerceFunnel";
+import { SESSION_FUNNEL_STEPS } from "../analytics/shared/aliases";
 import { percentOrNull, roundPct, toCount } from "../analytics/shared/numbers";
+import {
+  buildSessionFunnel,
+  fetchSessionFunnel,
+} from "../analytics/sessionFunnel";
+import { fetchShopperSummary } from "../analytics/shopperSummary";
 import {
   fetchTrend,
   fetchTrendSpanDays,
@@ -33,17 +35,6 @@ import type { AuthRequest } from "../middleware/auth.middleware";
 // ---------------------------------------------------------------------------
 // Row types for typed raw queries
 // ---------------------------------------------------------------------------
-
-interface TopEventRow {
-  name: string;
-  count: bigint;
-}
-
-interface ShopperSummaryRow {
-  uniqueCustomers: bigint;
-  uniqueSessions: bigint;
-  purchasingSessions: bigint;
-}
 
 interface ProductPerformanceRow {
   projectId: string;
@@ -204,249 +195,6 @@ function buildHealth(params: {
   return { score, status, reasons };
 }
 
-// ---------------------------------------------------------------------------
-// Commerce conversion funnel — aggregate event-name counts only.
-//
-// Event.userId is the account owner, NOT the shopper/visitor, and there is no
-// session id on events yet. So this deliberately reports honest aggregate
-// volumes per funnel stage; it does not (and must not) pretend to follow
-// individual shoppers through the journey. True shopper-level funnels need a
-// sessionId/visitor id on Event — a later, migration-requiring task.
-// ---------------------------------------------------------------------------
-
-interface CommerceFunnelStep {
-  id: CommerceStepId;
-  label: string;
-  count: number;
-  conversionFromFirstPercent: number | null;
-  conversionFromPreviousPercent: number | null;
-  dropOffFromPreviousPercent: number | null;
-}
-
-interface CommerceFriction {
-  paymentFailed: number;
-  outOfStock: number;
-  itemUnavailable: number;
-  deliveryFeeShown: number;
-  etaShown: number;
-  couponApplied: number;
-}
-
-interface CommerceFunnelInsight {
-  type:
-    | "healthy"
-    | "view_to_cart_drop"
-    | "cart_to_checkout_drop"
-    | "checkout_to_purchase_drop"
-    | "missing_top_of_funnel"
-    | "no_commerce_events";
-  severity: "info" | "warning" | "critical";
-  title: string;
-  description: string;
-}
-
-interface CommerceFunnel {
-  label: string;
-  totalCommerceEvents: number;
-  // Funnel-step events + friction events — see comment at its computation.
-  commerceSignalEvents: number;
-  steps: CommerceFunnelStep[];
-  friction: CommerceFriction;
-  insight: CommerceFunnelInsight;
-}
-
-const VIEW_TO_CART_DROP_THRESHOLD_PCT = 70;
-const CART_TO_CHECKOUT_DROP_THRESHOLD_PCT = 60;
-const CHECKOUT_TO_PURCHASE_DROP_THRESHOLD_PCT = 50;
-
-function buildCommerceFunnel(countsByName: Map<string, number>): CommerceFunnel {
-  const countFor = (aliases: readonly string[]): number =>
-    aliases.reduce((sum, alias) => sum + (countsByName.get(alias) ?? 0), 0);
-
-  const rawCounts = COMMERCE_STEPS.map((step) => countFor(step.aliases));
-  const firstCount = rawCounts[0] ?? 0;
-  const totalCommerceEvents = rawCounts.reduce((sum, count) => sum + count, 0);
-
-  const steps: CommerceFunnelStep[] = COMMERCE_STEPS.map((step, index) => {
-    const count = rawCounts[index] ?? 0;
-
-    // Without any product views there is no funnel baseline — every
-    // percentage is null rather than a made-up number.
-    if (firstCount === 0) {
-      return {
-        id: step.id,
-        label: step.label,
-        count,
-        conversionFromFirstPercent: null,
-        conversionFromPreviousPercent: null,
-        dropOffFromPreviousPercent: null,
-      };
-    }
-
-    if (index === 0) {
-      return {
-        id: step.id,
-        label: step.label,
-        count,
-        conversionFromFirstPercent: 100,
-        conversionFromPreviousPercent: null,
-        dropOffFromPreviousPercent: null,
-      };
-    }
-
-    const previousCount = rawCounts[index - 1] ?? 0;
-    const conversionFromPreviousPercent =
-      previousCount > 0 ? roundPct((count / previousCount) * 100) : null;
-
-    return {
-      id: step.id,
-      label: step.label,
-      count,
-      conversionFromFirstPercent: roundPct((count / firstCount) * 100),
-      conversionFromPreviousPercent,
-      dropOffFromPreviousPercent:
-        conversionFromPreviousPercent !== null
-          ? roundPct(100 - conversionFromPreviousPercent)
-          : null,
-    };
-  });
-
-  const friction: CommerceFriction = {
-    paymentFailed: countFor(COMMERCE_FRICTION_ALIASES.paymentFailed),
-    outOfStock: countFor(COMMERCE_FRICTION_ALIASES.outOfStock),
-    itemUnavailable: countFor(COMMERCE_FRICTION_ALIASES.itemUnavailable),
-    deliveryFeeShown: countFor(COMMERCE_FRICTION_ALIASES.deliveryFeeShown),
-    etaShown: countFor(COMMERCE_FRICTION_ALIASES.etaShown),
-    couponApplied: countFor(COMMERCE_FRICTION_ALIASES.couponApplied),
-  };
-
-  // Funnel-step events plus friction events — used to decide whether *any*
-  // commerce signal exists in this scope, so a friction-only scope (e.g. only
-  // payment_failed events, no funnel steps) isn't reported as "no commerce
-  // events" just because it has no funnel-step events.
-  const frictionTotal = Object.values(friction).reduce((sum, c) => sum + c, 0);
-  const commerceSignalEvents = totalCommerceEvents + frictionTotal;
-
-  const viewToCartDrop = steps[1]?.dropOffFromPreviousPercent ?? null;
-  const cartToCheckoutDrop = steps[2]?.dropOffFromPreviousPercent ?? null;
-  const checkoutToPurchaseDrop = steps[3]?.dropOffFromPreviousPercent ?? null;
-
-  let insight: CommerceFunnelInsight;
-  if (commerceSignalEvents === 0) {
-    insight = {
-      type: "no_commerce_events",
-      severity: "info",
-      title: "No commerce funnel events",
-      description:
-        "No commerce funnel events were received in this scope yet.",
-    };
-  } else if (firstCount === 0) {
-    // Commerce events exist, but the top of the funnel (product_viewed) is
-    // missing — so we can't compute conversion. Real counts still show below.
-    insight = {
-      type: "missing_top_of_funnel",
-      severity: "warning",
-      title: "Missing product view tracking",
-      description:
-        "Commerce events were received, but product_viewed events are missing. Add product_viewed tracking to measure the full shopper journey.",
-    };
-  } else if (
-    viewToCartDrop !== null &&
-    viewToCartDrop > VIEW_TO_CART_DROP_THRESHOLD_PCT
-  ) {
-    insight = {
-      type: "view_to_cart_drop",
-      severity: "warning",
-      title: "Shoppers view products but rarely add to cart",
-      description: `${viewToCartDrop}% of product views do not turn into add-to-cart events in this scope.`,
-    };
-  } else if (
-    cartToCheckoutDrop !== null &&
-    cartToCheckoutDrop > CART_TO_CHECKOUT_DROP_THRESHOLD_PCT
-  ) {
-    insight = {
-      type: "cart_to_checkout_drop",
-      severity: "warning",
-      title: "Carts are not reaching checkout",
-      description: `${cartToCheckoutDrop}% of add-to-cart events do not lead to a started checkout in this scope.`,
-    };
-  } else if (
-    checkoutToPurchaseDrop !== null &&
-    checkoutToPurchaseDrop > CHECKOUT_TO_PURCHASE_DROP_THRESHOLD_PCT
-  ) {
-    insight = {
-      type: "checkout_to_purchase_drop",
-      severity: "critical",
-      title: "Checkouts are not converting into purchases",
-      description: `${checkoutToPurchaseDrop}% of started checkouts do not end in a completed purchase in this scope.`,
-    };
-  } else {
-    insight = {
-      type: "healthy",
-      severity: "info",
-      title: "Funnel looks healthy",
-      description:
-        "No unusual drop-off detected between funnel steps in this scope.",
-    };
-  }
-
-  return {
-    label: "Product Viewed → Purchase Completed",
-    totalCommerceEvents,
-    commerceSignalEvents,
-    steps,
-    friction,
-    insight,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Session-based commerce funnel.
-//
-// Unlike commerceFunnel (which counts raw events), this counts DISTINCT
-// shopper sessions that reached each stage — a session counts for a step if it
-// contains at least one event whose name matches that step. Only rows with a
-// non-null sessionId participate, so pre-session-tracking data is ignored
-// rather than guessed at. This is the real "how many shoppers made it this
-// far" funnel.
-// ---------------------------------------------------------------------------
-
-interface SessionFunnelStep {
-  id: CommerceStepId;
-  label: string;
-  sessions: number;
-  conversionFromFirstPercent: number | null;
-  conversionFromPreviousPercent: number | null;
-  dropOffFromPreviousPercent: number | null;
-  abandonedFromPrevious: number | null;
-}
-
-interface SessionFunnelAbandonment {
-  viewedNotCarted: number;
-  cartedNotCheckout: number;
-  checkoutNotPurchased: number;
-}
-
-interface SessionFunnelInsight {
-  type:
-    | "healthy"
-    | "view_to_cart_drop"
-    | "cart_to_checkout_drop"
-    | "checkout_to_purchase_drop"
-    | "no_session_data";
-  severity: "info" | "warning" | "critical";
-  title: string;
-  description: string;
-}
-
-interface SessionFunnel {
-  label: string;
-  totalSessions: number;
-  steps: SessionFunnelStep[];
-  abandonment: SessionFunnelAbandonment;
-  insight: SessionFunnelInsight;
-}
-
 interface ProductStat {
   projectId: string;
   projectName: string;
@@ -565,145 +313,6 @@ function buildProductPerformance(params: {
       .sort((a, b) => b.cartSessions - a.cartSessions)
       .slice(0, 6),
     categories,
-  };
-}
-
-interface SessionFunnelRow {
-  totalSessions: bigint;
-  productViewed: bigint;
-  addToCart: bigint;
-  checkoutStarted: bigint;
-  purchaseCompleted: bigint;
-}
-
-function buildSessionFunnel(row: SessionFunnelRow | undefined): SessionFunnel {
-  const totalSessions = toCount(row?.totalSessions);
-  const stepSessions = [
-    toCount(row?.productViewed),
-    toCount(row?.addToCart),
-    toCount(row?.checkoutStarted),
-    toCount(row?.purchaseCompleted),
-  ];
-  const firstCount = stepSessions[0] ?? 0;
-
-  const steps: SessionFunnelStep[] = SESSION_FUNNEL_STEPS.map((step, index) => {
-    const sessions = stepSessions[index] ?? 0;
-
-    // No sessions reached the top of the funnel — no baseline, so every
-    // percentage is null rather than fabricated.
-    if (firstCount === 0) {
-      return {
-        id: step.id,
-        label: step.label,
-        sessions,
-        conversionFromFirstPercent: null,
-        conversionFromPreviousPercent: null,
-        dropOffFromPreviousPercent: null,
-        abandonedFromPrevious: null,
-      };
-    }
-
-    if (index === 0) {
-      return {
-        id: step.id,
-        label: step.label,
-        sessions,
-        conversionFromFirstPercent: 100,
-        conversionFromPreviousPercent: null,
-        dropOffFromPreviousPercent: null,
-        abandonedFromPrevious: null,
-      };
-    }
-
-    const previousSessions = stepSessions[index - 1] ?? 0;
-    const conversionFromPreviousPercent =
-      previousSessions > 0 ? roundPct((sessions / previousSessions) * 100) : null;
-
-    return {
-      id: step.id,
-      label: step.label,
-      sessions,
-      conversionFromFirstPercent: roundPct((sessions / firstCount) * 100),
-      conversionFromPreviousPercent,
-      dropOffFromPreviousPercent:
-        conversionFromPreviousPercent !== null
-          ? roundPct(100 - conversionFromPreviousPercent)
-          : null,
-      // Steps aren't strictly nested (a session could purchase without a
-      // recorded view), so clamp at 0 — a negative "abandoned" count is
-      // never meaningful to show.
-      abandonedFromPrevious: Math.max(0, previousSessions - sessions),
-    };
-  });
-
-  const abandonment: SessionFunnelAbandonment = {
-    viewedNotCarted: Math.max(0, (stepSessions[0] ?? 0) - (stepSessions[1] ?? 0)),
-    cartedNotCheckout: Math.max(0, (stepSessions[1] ?? 0) - (stepSessions[2] ?? 0)),
-    checkoutNotPurchased: Math.max(
-      0,
-      (stepSessions[2] ?? 0) - (stepSessions[3] ?? 0),
-    ),
-  };
-
-  const viewToCartDrop = steps[1]?.dropOffFromPreviousPercent ?? null;
-  const cartToCheckoutDrop = steps[2]?.dropOffFromPreviousPercent ?? null;
-  const checkoutToPurchaseDrop = steps[3]?.dropOffFromPreviousPercent ?? null;
-
-  let insight: SessionFunnelInsight;
-  if (totalSessions === 0) {
-    insight = {
-      type: "no_session_data",
-      severity: "info",
-      title: "No session data yet",
-      description:
-        "Send events with customerId and sessionId to unlock session-based funnel analytics.",
-    };
-  } else if (
-    viewToCartDrop !== null &&
-    viewToCartDrop > VIEW_TO_CART_DROP_THRESHOLD_PCT
-  ) {
-    insight = {
-      type: "view_to_cart_drop",
-      severity: "warning",
-      title: "Sessions view products but rarely add to cart",
-      description: `${viewToCartDrop}% of sessions that viewed a product did not add anything to cart.`,
-    };
-  } else if (
-    cartToCheckoutDrop !== null &&
-    cartToCheckoutDrop > CART_TO_CHECKOUT_DROP_THRESHOLD_PCT
-  ) {
-    insight = {
-      type: "cart_to_checkout_drop",
-      severity: "warning",
-      title: "Carts are not reaching checkout",
-      description: `${cartToCheckoutDrop}% of sessions with a cart did not start checkout.`,
-    };
-  } else if (
-    checkoutToPurchaseDrop !== null &&
-    checkoutToPurchaseDrop > CHECKOUT_TO_PURCHASE_DROP_THRESHOLD_PCT
-  ) {
-    insight = {
-      type: "checkout_to_purchase_drop",
-      severity: "critical",
-      title: "Checkouts are not converting into purchases",
-      description: `${checkoutToPurchaseDrop}% of sessions that started checkout did not complete a purchase.`,
-    };
-  } else {
-    insight = {
-      type: "healthy",
-      severity: "info",
-      title: "Session funnel looks healthy",
-      description:
-        "No unusual drop-off detected between session funnel steps in this scope.",
-    };
-  }
-
-  return {
-    label: "Product Viewed → Purchase Completed",
-    totalSessions,
-    steps,
-    abandonment,
-    insight,
   };
 }
 
@@ -904,8 +513,8 @@ export async function getAnalyticsSummaryController(
       eventActivity,
       trendPoints,
       periodComparison,
-      commerceCountRows,
-      shopperSummaryResult,
+      commerceCounts,
+      shopperSummary,
       sessionFunnelResult,
       productPerformanceRows,
       categoryPerformanceRows,
@@ -913,54 +522,9 @@ export async function getAnalyticsSummaryController(
       fetchEventActivity(scope),
       fetchTrend(scope, trendGranularity),
       fetchPeriodComparison(scope),
-
-      // Commerce funnel + friction counts, grouped by lowered event name so
-      // alias matching is case-insensitive. Same project/range scope as the
-      // rest of analytics; alias list is bound as parameters via Prisma.join.
-      prisma.$queryRaw<TopEventRow[]>`
-        SELECT LOWER(name) AS name, COUNT(*) AS count
-        FROM "Event"
-        WHERE ${scope.sql.currentEvent}
-        AND LOWER(name) IN (${Prisma.join(ALL_COMMERCE_ALIASES)})
-        GROUP BY LOWER(name)
-      `,
-
-      // Shopper/session summary. COUNT(DISTINCT col) skips NULLs, so rows
-      // ingested before customerId/sessionId existed simply don't count —
-      // no ipAddress/userAgent identity guessing.
-      prisma.$queryRaw<ShopperSummaryRow[]>`
-        SELECT
-          COUNT(DISTINCT "customerId") AS "uniqueCustomers",
-          COUNT(DISTINCT "sessionId") AS "uniqueSessions",
-          COUNT(DISTINCT "sessionId") FILTER (
-            WHERE LOWER(name) IN (${Prisma.join([...PURCHASE_ALIASES])})
-          ) AS "purchasingSessions"
-        FROM "Event"
-        WHERE ${scope.sql.currentEvent}
-      `,
-
-      // Session-based funnel: distinct sessions that reached each stage. Only
-      // rows with a non-null sessionId count. Same project/range scope as the
-      // rest of analytics; alias lists bound as parameters via Prisma.join.
-      prisma.$queryRaw<SessionFunnelRow[]>`
-        SELECT
-          COUNT(DISTINCT "sessionId") AS "totalSessions",
-          COUNT(DISTINCT "sessionId") FILTER (
-            WHERE LOWER(name) IN (${Prisma.join([...SESSION_FUNNEL_STEPS[0].aliases])})
-          ) AS "productViewed",
-          COUNT(DISTINCT "sessionId") FILTER (
-            WHERE LOWER(name) IN (${Prisma.join([...SESSION_FUNNEL_STEPS[1].aliases])})
-          ) AS "addToCart",
-          COUNT(DISTINCT "sessionId") FILTER (
-            WHERE LOWER(name) IN (${Prisma.join([...SESSION_FUNNEL_STEPS[2].aliases])})
-          ) AS "checkoutStarted",
-          COUNT(DISTINCT "sessionId") FILTER (
-            WHERE LOWER(name) IN (${Prisma.join([...SESSION_FUNNEL_STEPS[3].aliases])})
-          ) AS "purchaseCompleted"
-        FROM "Event"
-        WHERE ${scope.sql.currentEvent}
-          AND "sessionId" IS NOT NULL
-      `,
+      fetchCommerceCounts(scope),
+      fetchShopperSummary(scope),
+      fetchSessionFunnel(scope),
 
       // Product performance: one row per project-scoped product identity.
       // Repeated interactions collapse to one project-scoped session, and a
@@ -1218,12 +782,8 @@ export async function getAnalyticsSummaryController(
       ),
     });
 
-    const commerceCounts = new Map<string, number>();
-    for (const row of commerceCountRows) {
-      commerceCounts.set(row.name, toCount(row.count));
-    }
     const commerceFunnel = buildCommerceFunnel(commerceCounts);
-    const sessionFunnel = buildSessionFunnel(sessionFunnelResult[0]);
+    const sessionFunnel = buildSessionFunnel(sessionFunnelResult);
     const productPerformance = buildProductPerformance({
       productRows: productPerformanceRows,
       categoryRows: categoryPerformanceRows,
@@ -1253,13 +813,7 @@ export async function getAnalyticsSummaryController(
         commerceFunnel,
         sessionFunnel,
         productPerformance,
-        shopperSummary: {
-          uniqueCustomers: toCount(shopperSummaryResult[0]?.uniqueCustomers),
-          uniqueSessions: toCount(shopperSummaryResult[0]?.uniqueSessions),
-          purchasingSessions: toCount(
-            shopperSummaryResult[0]?.purchasingSessions,
-          ),
-        },
+        shopperSummary,
       },
     });
   } catch (error) {
