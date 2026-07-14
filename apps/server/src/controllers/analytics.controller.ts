@@ -4,7 +4,6 @@ import {
   type AnalyticsScope,
 } from "../analytics/analyticsScope";
 import {
-  buildAnalyticsSummary,
   buildBehaviorSummary,
   buildConversionSummary,
   buildOverviewSummary,
@@ -52,6 +51,14 @@ export async function getAnalyticsSummaryController(
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
+    const tab = req.query.tab;
+    if (!isAnalyticsTab(tab)) {
+      return res.status(400).json({
+        success: false,
+        message: "Unknown analytics tab",
+      });
+    }
+
     const scopeResult = createAnalyticsScope({
       userId: req.user.userId,
       projectId: req.query.projectId,
@@ -67,18 +74,7 @@ export async function getAnalyticsSummaryController(
       });
     }
 
-    const tab = req.query.tab;
-    if (tab !== undefined && !isAnalyticsTab(tab)) {
-      return res.status(400).json({
-        success: false,
-        message: "Unknown analytics tab",
-      });
-    }
-
-    const data =
-      tab === undefined
-        ? await buildAnalyticsSummary(scopeResult.value)
-        : await buildTabSummary(tab, scopeResult.value);
+    const data = await buildTabSummary(tab, scopeResult.value);
 
     return res.json({ success: true, data });
   } catch (error) {

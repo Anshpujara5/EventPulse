@@ -251,19 +251,3 @@ export interface AnalyticsTabDataMap {
 }
 
 export type AnalyticsDataTabId = keyof AnalyticsTabDataMap;
-
-export interface AnalyticsData {
-  summary: AnalyticsSummary;
-  trend: EventTrend;
-  topEvents: TopEvent[];
-  eventsByProject: ProjectEventCount[];
-  recentActivity: RecentEvent[];
-  topProperties: TopProperty[];
-  insights: AnalyticsInsight[];
-  comparison: PeriodComparison;
-  health: AnalyticsHealth;
-  commerceFunnel: CommerceFunnel;
-  sessionFunnel: SessionFunnel;
-  productPerformance: ProductPerformance;
-  shopperSummary: ShopperSummary;
-}
