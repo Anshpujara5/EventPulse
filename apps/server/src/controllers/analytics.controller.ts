@@ -1,6 +1,20 @@
 import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 import { createAnalyticsScope } from "../analytics/analyticsScope";
+import {
+  ALL_COMMERCE_ALIASES,
+  COMMERCE_FRICTION_ALIASES,
+  COMMERCE_STEPS,
+  PURCHASE_ALIASES,
+  SESSION_FUNNEL_STEPS,
+  type CommerceStepId,
+} from "../analytics/shared/aliases";
+import {
+  percentageOfTotal,
+  percentOrNull,
+  roundPct,
+  toCount,
+} from "../analytics/shared/numbers";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
 import type { TimeRangeToken } from "../utils/timeRange";
@@ -130,8 +144,8 @@ function buildComparison(
   periodComparison: PeriodComparisonRow | undefined,
   comparisonPeriodLabel: string,
 ) {
-  const currentPeriodEvents = Number(periodComparison?.current ?? 0);
-  const previousPeriodEvents = Number(periodComparison?.previous ?? 0);
+  const currentPeriodEvents = toCount(periodComparison?.current);
+  const previousPeriodEvents = toCount(periodComparison?.previous);
 
   let changePercent: number | null = null;
   let direction: ComparisonDirection;
@@ -143,7 +157,7 @@ function buildComparison(
   } else {
     const pct =
       ((currentPeriodEvents - previousPeriodEvents) / previousPeriodEvents) * 100;
-    changePercent = Math.round(pct * 10) / 10;
+    changePercent = roundPct(pct);
     direction =
       Math.abs(pct) < FLAT_CHANGE_THRESHOLD_PCT ? "flat" : pct > 0 ? "up" : "down";
   }
@@ -262,12 +276,6 @@ function buildHealth(params: {
 // sessionId/visitor id on Event — a later, migration-requiring task.
 // ---------------------------------------------------------------------------
 
-type CommerceStepId =
-  | "product_viewed"
-  | "add_to_cart"
-  | "checkout_started"
-  | "purchase_completed";
-
 interface CommerceFunnelStep {
   id: CommerceStepId;
   label: string;
@@ -309,80 +317,9 @@ interface CommerceFunnel {
   insight: CommerceFunnelInsight;
 }
 
-// Canonical lowercase aliases per funnel stage. Matching is case-insensitive:
-// names are lowered in SQL before comparing against these.
-const COMMERCE_STEPS: {
-  id: CommerceStepId;
-  label: string;
-  aliases: readonly string[];
-}[] = [
-  {
-    id: "product_viewed",
-    label: "Product Viewed",
-    aliases: [
-      "product_viewed",
-      "product_view",
-      "view_product",
-      "product_detail_viewed",
-      "product.opened",
-    ],
-  },
-  {
-    id: "add_to_cart",
-    label: "Added to Cart",
-    aliases: ["add_to_cart", "added_to_cart", "cart_added", "item_added_to_cart"],
-  },
-  {
-    id: "checkout_started",
-    label: "Checkout Started",
-    aliases: [
-      "checkout_started",
-      "start_checkout",
-      "checkout_initiated",
-      "begin_checkout",
-    ],
-  },
-  {
-    id: "purchase_completed",
-    label: "Purchase Completed",
-    // "checkout.completed" (dot form) is included because it's the example
-    // name used in our own developer docs.
-    aliases: [
-      "payment_completed",
-      "purchase_completed",
-      "order_completed",
-      "checkout_completed",
-      "checkout.completed",
-      "order_placed",
-    ],
-  },
-];
-
-const COMMERCE_FRICTION_ALIASES: Record<keyof CommerceFriction, readonly string[]> = {
-  paymentFailed: ["payment_failed"],
-  outOfStock: ["item_out_of_stock"],
-  itemUnavailable: ["item_unavailable"],
-  deliveryFeeShown: ["delivery_fee_shown"],
-  etaShown: ["eta_shown"],
-  couponApplied: ["coupon_applied"],
-};
-
-const ALL_COMMERCE_ALIASES: string[] = [
-  ...COMMERCE_STEPS.flatMap((step) => [...step.aliases]),
-  ...Object.values(COMMERCE_FRICTION_ALIASES).flat(),
-];
-
 const VIEW_TO_CART_DROP_THRESHOLD_PCT = 70;
 const CART_TO_CHECKOUT_DROP_THRESHOLD_PCT = 60;
 const CHECKOUT_TO_PURCHASE_DROP_THRESHOLD_PCT = 50;
-
-function roundPct(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
-function percentOrNull(numerator: number, denominator: number): number | null {
-  return denominator > 0 ? roundPct((numerator / denominator) * 100) : null;
-}
 
 function buildCommerceFunnel(countsByName: Map<string, number>): CommerceFunnel {
   const countFor = (aliases: readonly string[]): number =>
@@ -614,10 +551,10 @@ function buildProductPerformance(params: {
   categoryRows: CategoryPerformanceRow[];
 }): ProductPerformance {
   const products: ProductStat[] = params.productRows.map((row) => {
-    const viewSessions = Number(row.viewSessions);
-    const cartSessions = Number(row.cartSessions);
-    const viewPurchaseSessions = Number(row.viewPurchaseSessions);
-    const cartPurchaseSessions = Number(row.cartPurchaseSessions);
+    const viewSessions = toCount(row.viewSessions);
+    const cartSessions = toCount(row.cartSessions);
+    const viewPurchaseSessions = toCount(row.viewPurchaseSessions);
+    const cartPurchaseSessions = toCount(row.cartPurchaseSessions);
 
     return {
       projectId: row.projectId,
@@ -626,7 +563,7 @@ function buildProductPerformance(params: {
       productName: row.productName,
       viewSessions,
       cartSessions,
-      sessionsThatPurchased: Number(row.sessionsThatPurchased),
+      sessionsThatPurchased: toCount(row.sessionsThatPurchased),
       viewToPurchasePercent: percentOrNull(
         viewPurchaseSessions,
         viewSessions,
@@ -642,10 +579,10 @@ function buildProductPerformance(params: {
   });
 
   const categories: CategoryStat[] = params.categoryRows.map((row) => {
-    const viewSessions = Number(row.viewSessions);
-    const cartSessions = Number(row.cartSessions);
-    const viewPurchaseSessions = Number(row.viewPurchaseSessions);
-    const cartPurchaseSessions = Number(row.cartPurchaseSessions);
+    const viewSessions = toCount(row.viewSessions);
+    const cartSessions = toCount(row.cartSessions);
+    const viewPurchaseSessions = toCount(row.viewPurchaseSessions);
+    const cartPurchaseSessions = toCount(row.cartPurchaseSessions);
 
     return {
       projectId: row.projectId,
@@ -653,7 +590,7 @@ function buildProductPerformance(params: {
       category: row.category,
       viewSessions,
       cartSessions,
-      sessionsThatPurchased: Number(row.sessionsThatPurchased),
+      sessionsThatPurchased: toCount(row.sessionsThatPurchased),
       viewToPurchasePercent: percentOrNull(
         viewPurchaseSessions,
         viewSessions,
@@ -693,54 +630,6 @@ function buildProductPerformance(params: {
   };
 }
 
-// Per-step aliases for the session funnel. Matching is case-insensitive
-// (names are lowered in SQL). These follow the session-funnel spec exactly —
-// note the purchase step intentionally omits "order_placed" (which the
-// event-count commerceFunnel includes) to stay faithful to that spec.
-const SESSION_FUNNEL_STEPS: {
-  id: CommerceStepId;
-  label: string;
-  aliases: readonly string[];
-}[] = [
-  {
-    id: "product_viewed",
-    label: "Product Viewed",
-    aliases: [
-      "product_viewed",
-      "product_view",
-      "view_product",
-      "product_detail_viewed",
-      "product.opened",
-    ],
-  },
-  {
-    id: "add_to_cart",
-    label: "Added to Cart",
-    aliases: ["add_to_cart", "added_to_cart", "cart_added", "item_added_to_cart"],
-  },
-  {
-    id: "checkout_started",
-    label: "Checkout Started",
-    aliases: [
-      "checkout_started",
-      "start_checkout",
-      "checkout_initiated",
-      "begin_checkout",
-    ],
-  },
-  {
-    id: "purchase_completed",
-    label: "Purchase Completed",
-    aliases: [
-      "payment_completed",
-      "purchase_completed",
-      "order_completed",
-      "checkout_completed",
-      "checkout.completed",
-    ],
-  },
-];
-
 interface SessionFunnelRow {
   totalSessions: bigint;
   productViewed: bigint;
@@ -750,12 +639,12 @@ interface SessionFunnelRow {
 }
 
 function buildSessionFunnel(row: SessionFunnelRow | undefined): SessionFunnel {
-  const totalSessions = Number(row?.totalSessions ?? 0);
+  const totalSessions = toCount(row?.totalSessions);
   const stepSessions = [
-    Number(row?.productViewed ?? 0),
-    Number(row?.addToCart ?? 0),
-    Number(row?.checkoutStarted ?? 0),
-    Number(row?.purchaseCompleted ?? 0),
+    toCount(row?.productViewed),
+    toCount(row?.addToCart),
+    toCount(row?.checkoutStarted),
+    toCount(row?.purchaseCompleted),
   ];
   const firstCount = stepSessions[0] ?? 0;
 
@@ -957,8 +846,8 @@ function buildInsights(params: {
   const insights: AnalyticsInsight[] = [];
 
   // Growth / drop — current period vs the equivalent previous period.
-  const current = Number(periodComparison?.current ?? 0);
-  const previous = Number(periodComparison?.previous ?? 0);
+  const current = toCount(periodComparison?.current);
+  const previous = toCount(periodComparison?.previous);
   if (previous === 0 && current > 0) {
     insights.push({
       id: "growth-new",
@@ -1346,13 +1235,7 @@ export async function getAnalyticsSummaryController(
           COUNT(DISTINCT "customerId") AS "uniqueCustomers",
           COUNT(DISTINCT "sessionId") AS "uniqueSessions",
           COUNT(DISTINCT "sessionId") FILTER (
-            WHERE LOWER(name) IN (
-              'purchase_completed',
-              'payment_completed',
-              'order_completed',
-              'checkout_completed',
-              'checkout.completed'
-            )
+            WHERE LOWER(name) IN (${Prisma.join([...PURCHASE_ALIASES])})
           ) AS "purchasingSessions"
         FROM "Event"
         WHERE ${scope.sql.currentEvent}
@@ -1596,33 +1479,29 @@ export async function getAnalyticsSummaryController(
       `,
     ]);
 
-    const scopedTotal = Number(totalResult[0]?.count ?? 0);
-
-    function percentageOf(count: number): number {
-      return scopedTotal > 0 ? Math.round((count / scopedTotal) * 1000) / 10 : 0;
-    }
+    const scopedTotal = toCount(totalResult[0]?.count);
 
     // Average events per day across the scoped window.
     let avgEventsPerDay = 0;
     if (scopedTotal > 0) {
       const days = scope.range.dayCount ?? Math.max(1, trendPoints.length);
-      avgEventsPerDay = Math.round((scopedTotal / days) * 10) / 10;
+      avgEventsPerDay = roundPct(scopedTotal / days);
     }
 
     const mappedTrendPoints = trendPoints.map((r) => ({
       date: r.bucket,
-      count: Number(r.count),
+      count: toCount(r.count),
     }));
     const mappedTopEvents = topEvents.map((r) => ({
       name: r.name,
-      count: Number(r.count),
-      percentage: percentageOf(Number(r.count)),
+      count: toCount(r.count),
+      percentage: percentageOfTotal(toCount(r.count), scopedTotal),
     }));
     const mappedEventsByProject = eventsByProject.map((r) => ({
       projectId: r.projectId,
       projectName: r.projectName,
-      count: Number(r.count),
-      percentage: percentageOf(Number(r.count)),
+      count: toCount(r.count),
+      percentage: percentageOfTotal(toCount(r.count), scopedTotal),
     }));
 
     const insights = buildInsights({
@@ -1632,10 +1511,10 @@ export async function getAnalyticsSummaryController(
       trendPoints: mappedTrendPoints,
       topEvents: mappedTopEvents,
       eventsByProject: mappedEventsByProject,
-      activeProjectsWithEvents: Number(activeProjectsResult[0]?.count ?? 0),
+      activeProjectsWithEvents: toCount(activeProjectsResult[0]?.count),
       totalActiveProjects: scope.projectId
         ? null
-        : Number(totalActiveProjectsResult[0]?.count ?? 0),
+        : toCount(totalActiveProjectsResult[0]?.count),
     });
 
     const comparison = buildComparison(
@@ -1645,8 +1524,8 @@ export async function getAnalyticsSummaryController(
 
     const health = buildHealth({
       scopedTotal,
-      eventsToday: Number(todayResult[0]?.count ?? 0),
-      uniqueEventNames: Number(uniqueNamesResult[0]?.count ?? 0),
+      eventsToday: toCount(todayResult[0]?.count),
+      uniqueEventNames: toCount(uniqueNamesResult[0]?.count),
       checkTodayActivity: scope.checkTodayActivity,
       projectId: scope.projectId,
       topEvent: mappedTopEvents[0],
@@ -1660,7 +1539,7 @@ export async function getAnalyticsSummaryController(
 
     const commerceCounts = new Map<string, number>();
     for (const row of commerceCountRows) {
-      commerceCounts.set(row.name, Number(row.count));
+      commerceCounts.set(row.name, toCount(row.count));
     }
     const commerceFunnel = buildCommerceFunnel(commerceCounts);
     const sessionFunnel = buildSessionFunnel(sessionFunnelResult[0]);
@@ -1674,9 +1553,9 @@ export async function getAnalyticsSummaryController(
       data: {
         summary: {
           totalEvents: scopedTotal,
-          eventsToday: Number(todayResult[0]?.count ?? 0),
-          uniqueEventNames: Number(uniqueNamesResult[0]?.count ?? 0),
-          activeProjects: Number(activeProjectsResult[0]?.count ?? 0),
+          eventsToday: toCount(todayResult[0]?.count),
+          uniqueEventNames: toCount(uniqueNamesResult[0]?.count),
+          activeProjects: toCount(activeProjectsResult[0]?.count),
           avgEventsPerDay,
         },
         trend: {
@@ -1693,7 +1572,7 @@ export async function getAnalyticsSummaryController(
         })),
         topProperties: topProperties.map((r) => ({
           key: r.key,
-          count: Number(r.count),
+          count: toCount(r.count),
         })),
         insights,
         comparison,
@@ -1702,10 +1581,10 @@ export async function getAnalyticsSummaryController(
         sessionFunnel,
         productPerformance,
         shopperSummary: {
-          uniqueCustomers: Number(shopperSummaryResult[0]?.uniqueCustomers ?? 0),
-          uniqueSessions: Number(shopperSummaryResult[0]?.uniqueSessions ?? 0),
-          purchasingSessions: Number(
-            shopperSummaryResult[0]?.purchasingSessions ?? 0,
+          uniqueCustomers: toCount(shopperSummaryResult[0]?.uniqueCustomers),
+          uniqueSessions: toCount(shopperSummaryResult[0]?.uniqueSessions),
+          purchasingSessions: toCount(
+            shopperSummaryResult[0]?.purchasingSessions,
           ),
         },
       },
