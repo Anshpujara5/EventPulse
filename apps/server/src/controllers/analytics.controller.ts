@@ -2,6 +2,17 @@ import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 import { createAnalyticsScope } from "../analytics/analyticsScope";
 import {
+  buildComparison,
+  fetchPeriodComparison,
+  type ComparisonDirection,
+  type PeriodComparisonCounts,
+} from "../analytics/comparison";
+import {
+  fetchEventActivity,
+  type ProjectEventCount,
+  type TopEvent,
+} from "../analytics/eventActivity";
+import {
   ALL_COMMERCE_ALIASES,
   COMMERCE_FRICTION_ALIASES,
   COMMERCE_STEPS,
@@ -9,59 +20,23 @@ import {
   SESSION_FUNNEL_STEPS,
   type CommerceStepId,
 } from "../analytics/shared/aliases";
+import { percentOrNull, roundPct, toCount } from "../analytics/shared/numbers";
 import {
-  percentageOfTotal,
-  percentOrNull,
-  roundPct,
-  toCount,
-} from "../analytics/shared/numbers";
+  fetchTrend,
+  fetchTrendSpanDays,
+  resolveTrendGranularity,
+  type TrendPoint,
+} from "../analytics/trend";
 import { prisma } from "../config/prisma";
 import type { AuthRequest } from "../middleware/auth.middleware";
-import type { TimeRangeToken } from "../utils/timeRange";
 
 // ---------------------------------------------------------------------------
 // Row types for typed raw queries
 // ---------------------------------------------------------------------------
 
-interface CountRow {
-  count: bigint;
-}
-
 interface TopEventRow {
   name: string;
   count: bigint;
-}
-
-interface ProjectEventRow {
-  projectId: string;
-  projectName: string;
-  count: bigint;
-}
-
-interface TrendPointRow {
-  bucket: string;
-  count: bigint;
-}
-
-interface RecentEventRow {
-  id: string;
-  name: string;
-  projectName: string;
-  createdAt: Date;
-}
-
-interface PropertyKeyRow {
-  key: string;
-  count: bigint;
-}
-
-interface SpanRow {
-  spanDays: number | null;
-}
-
-interface PeriodComparisonRow {
-  current: bigint;
-  previous: bigint;
 }
 
 interface ShopperSummaryRow {
@@ -99,8 +74,6 @@ interface CategoryPerformanceRow {
   currency: string | null;
 }
 
-type TrendGranularity = "hour" | "day" | "month";
-
 // ---------------------------------------------------------------------------
 // Insights — simple, rule-based signals computed from the same scoped data
 // as the rest of this endpoint. Every number comes from a real query; there
@@ -135,41 +108,6 @@ const DOMINANCE_THRESHOLD_PCT = 50;
 const ANOMALY_RATIO_THRESHOLD = 3;
 const CRITICAL_ANOMALY_RATIO = 6;
 const MAX_INSIGHTS = 5;
-
-const FLAT_CHANGE_THRESHOLD_PCT = 5;
-
-type ComparisonDirection = "up" | "down" | "flat" | "new" | "no_data";
-
-function buildComparison(
-  periodComparison: PeriodComparisonRow | undefined,
-  comparisonPeriodLabel: string,
-) {
-  const currentPeriodEvents = toCount(periodComparison?.current);
-  const previousPeriodEvents = toCount(periodComparison?.previous);
-
-  let changePercent: number | null = null;
-  let direction: ComparisonDirection;
-
-  if (currentPeriodEvents === 0 && previousPeriodEvents === 0) {
-    direction = "no_data";
-  } else if (previousPeriodEvents === 0) {
-    direction = "new";
-  } else {
-    const pct =
-      ((currentPeriodEvents - previousPeriodEvents) / previousPeriodEvents) * 100;
-    changePercent = roundPct(pct);
-    direction =
-      Math.abs(pct) < FLAT_CHANGE_THRESHOLD_PCT ? "flat" : pct > 0 ? "up" : "down";
-  }
-
-  return {
-    currentPeriodEvents,
-    previousPeriodEvents,
-    changePercent,
-    direction,
-    label: `Compared with ${comparisonPeriodLabel}`,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Health score — a simple rule-based rollup over the same scoped data used
@@ -769,52 +707,13 @@ function buildSessionFunnel(row: SessionFunnelRow | undefined): SessionFunnel {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Trend bucketing.
-//
-// "createdAt" is stored as a naive `timestamp` column (see schema.prisma) —
-// its digits are whatever wall-clock the database session's TimeZone setting
-// produces when NOW() is cast down on insert (see event.controller.ts). Every
-// other query in this file (CURRENT_DATE, NOW() - interval, etc.) already
-// relies on that same session-timezone convention implicitly. Trend bucketing
-// does the same: all truncation/window math happens in SQL via date_trunc()
-// and NOW(), so it stays consistent with those queries. It deliberately does
-// NOT use `AT TIME ZONE` to reinterpret createdAt — that would treat the
-// session-local digits as UTC and shift real events into the wrong bucket
-// (or out of the window entirely) whenever the DB session isn't UTC.
-// ---------------------------------------------------------------------------
-
-const ALL_TIME_MONTHLY_THRESHOLD_DAYS = 60;
-
-interface FixedRangeSpec {
-  granularity: TrendGranularity;
-  lookback: string; // interval literal, bound as a parameter
-  step: string; // interval literal, bound as a parameter
-}
-
-const FIXED_RANGE_SPECS: Record<Exclude<TimeRangeToken, "all">, FixedRangeSpec> = {
-  "24h": { granularity: "hour", lookback: "23 hours", step: "1 hour" },
-  "7d": { granularity: "day", lookback: "6 days", step: "1 day" },
-  "30d": { granularity: "day", lookback: "29 days", step: "1 day" },
-};
-
-function customTrendGranularity(dayCount: number): TrendGranularity {
-  if (dayCount === 1) return "hour";
-  return dayCount <= ALL_TIME_MONTHLY_THRESHOLD_DAYS ? "day" : "month";
-}
-
 function buildInsights(params: {
   scopedTotal: number;
   projectId: string | null;
-  periodComparison: PeriodComparisonRow | undefined;
-  trendPoints: { date: string; count: number }[];
-  topEvents: { name: string; count: number; percentage: number }[];
-  eventsByProject: {
-    projectId: string;
-    projectName: string;
-    count: number;
-    percentage: number;
-  }[];
+  periodComparison: PeriodComparisonCounts;
+  trendPoints: TrendPoint[];
+  topEvents: TopEvent[];
+  eventsByProject: ProjectEventCount[];
   activeProjectsWithEvents: number;
   totalActiveProjects: number | null;
 }): AnalyticsInsight[] {
@@ -846,8 +745,8 @@ function buildInsights(params: {
   const insights: AnalyticsInsight[] = [];
 
   // Growth / drop — current period vs the equivalent previous period.
-  const current = toCount(periodComparison?.current);
-  const previous = toCount(periodComparison?.previous);
+  const current = periodComparison.current;
+  const previous = periodComparison.previous;
   if (previous === 0 && current > 0) {
     insights.push({
       id: "growth-new",
@@ -994,227 +893,26 @@ export async function getAnalyticsSummaryController(
     const scope = scopeResult.value;
 
     // "All time" trend granularity depends on the real data span (day buckets
-    // for up to 60 days of history, monthly beyond that). Measured in whole
-    // calendar days via a plain date subtraction so it's not affected by
-    // client/server timezone parsing.
-    let allTimeGranularity: TrendGranularity | null = null;
-    if (scope.range.isAllTime) {
-      const [spanRow] = await prisma.$queryRaw<SpanRow[]>`
-        SELECT (CURRENT_DATE - MIN("createdAt")::date) AS "spanDays"
-        FROM "Event"
-        WHERE ${scope.sql.ownedEvent}
-      `;
-      if (spanRow?.spanDays !== null && spanRow?.spanDays !== undefined) {
-        allTimeGranularity =
-          spanRow.spanDays <= ALL_TIME_MONTHLY_THRESHOLD_DAYS ? "day" : "month";
-      }
-    }
-
-    const trendGranularity: TrendGranularity | null = scope.range.isCustom
-      ? customTrendGranularity(scope.range.dayCount)
-      : scope.range.key === "all"
-        ? allTimeGranularity
-        : FIXED_RANGE_SPECS[scope.range.key].granularity;
-
-    function buildTrendQuery() {
-      if (scope.range.isCustom) {
-        const customRange = scope.range.custom;
-        const granularity = customTrendGranularity(scope.range.dayCount);
-        const step =
-          granularity === "hour"
-            ? "1 hour"
-            : granularity === "day"
-              ? "1 day"
-              : "1 month";
-        const endBucket =
-          granularity === "hour"
-            ? Prisma.sql`(${customRange.to}::date + INTERVAL '23 hours')`
-            : Prisma.sql`date_trunc(${granularity}, ${customRange.to}::date)`;
-
-        return prisma.$queryRaw<TrendPointRow[]>`
-          WITH buckets AS (
-            SELECT generate_series(
-              date_trunc(${granularity}, ${customRange.from}::date),
-              ${endBucket},
-              ${step}::interval
-            ) AS bucket
-          )
-          SELECT
-            TO_CHAR(b.bucket, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS bucket,
-            COALESCE(COUNT(e.id), 0) AS count
-          FROM buckets b
-          LEFT JOIN "Event" e
-            ON date_trunc(${granularity}, e."createdAt") = b.bucket
-            AND ${scope.sql.currentAliasedEvent}
-          GROUP BY b.bucket
-          ORDER BY b.bucket ASC
-        `;
-      }
-
-      if (scope.range.key === "all") {
-        if (!allTimeGranularity) {
-          return Promise.resolve([] as TrendPointRow[]);
-        }
-        const step = allTimeGranularity === "day" ? "1 day" : "1 month";
-        return prisma.$queryRaw<TrendPointRow[]>`
-          WITH bounds AS (
-            SELECT
-              date_trunc(${allTimeGranularity}, MIN("createdAt")) AS "start",
-              date_trunc(${allTimeGranularity}, NOW()) AS "end"
-            FROM "Event"
-            WHERE ${scope.sql.ownedEvent}
-          ),
-          buckets AS (
-            SELECT generate_series(bounds."start", bounds."end", ${step}::interval) AS bucket
-            FROM bounds
-          )
-          SELECT
-            TO_CHAR(b.bucket, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS bucket,
-            COALESCE(COUNT(e.id), 0) AS count
-          FROM buckets b
-          LEFT JOIN "Event" e
-            ON date_trunc(${allTimeGranularity}, e."createdAt") = b.bucket
-            AND ${scope.sql.ownedAliasedEvent}
-          GROUP BY b.bucket
-          ORDER BY b.bucket ASC
-        `;
-      }
-
-      const spec = FIXED_RANGE_SPECS[scope.range.key];
-      return prisma.$queryRaw<TrendPointRow[]>`
-        WITH buckets AS (
-          SELECT generate_series(
-            date_trunc(${spec.granularity}, NOW() - ${spec.lookback}::interval),
-            date_trunc(${spec.granularity}, NOW()),
-            ${spec.step}::interval
-          ) AS bucket
-        )
-        SELECT
-          TO_CHAR(b.bucket, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS bucket,
-          COALESCE(COUNT(e.id), 0) AS count
-        FROM buckets b
-        LEFT JOIN "Event" e
-          ON date_trunc(${spec.granularity}, e."createdAt") = b.bucket
-          AND ${scope.sql.ownedAliasedEvent}
-        GROUP BY b.bucket
-        ORDER BY b.bucket ASC
-      `;
-    }
-
-    function buildPeriodComparisonQuery() {
-      return prisma.$queryRaw<PeriodComparisonRow[]>`
-        SELECT
-          COUNT(*) FILTER (WHERE ${scope.sql.comparisonCurrentRange}) AS current,
-          COUNT(*) FILTER (WHERE ${scope.sql.comparisonPreviousRange}) AS previous
-        FROM "Event"
-        WHERE ${scope.sql.ownedEvent}
-      `;
-    }
+    // for up to 60 days of history, monthly beyond that). The span query stays
+    // sequential and runs only for the all-time scope, matching prior behavior.
+    const allTimeSpanDays = scope.range.isAllTime
+      ? await fetchTrendSpanDays(scope)
+      : null;
+    const trendGranularity = resolveTrendGranularity(scope, allTimeSpanDays);
 
     const [
-      totalResult,
-      todayResult,
-      uniqueNamesResult,
-      activeProjectsResult,
-      topEvents,
-      eventsByProject,
-      recentActivity,
-      topProperties,
+      eventActivity,
       trendPoints,
       periodComparison,
-      totalActiveProjectsResult,
       commerceCountRows,
       shopperSummaryResult,
       sessionFunnelResult,
       productPerformanceRows,
       categoryPerformanceRows,
     ] = await Promise.all([
-      // Total events matching the current project + range scope
-      prisma.$queryRaw<CountRow[]>`
-        SELECT COUNT(*) AS count
-        FROM "Event"
-        WHERE ${scope.sql.currentEvent}
-      `,
-
-      // Events today (since midnight, DB session timezone) — fixed window,
-      // not affected by range, matching the events page's own "today".
-      prisma.$queryRaw<CountRow[]>`
-        SELECT COUNT(*) AS count
-        FROM "Event"
-        WHERE ${scope.sql.todayEvent}
-      `,
-
-      // Unique event names within the current scope
-      prisma.$queryRaw<CountRow[]>`
-        SELECT COUNT(DISTINCT name) AS count
-        FROM "Event"
-        WHERE ${scope.sql.currentEvent}
-      `,
-
-      // Distinct projects with events within the current scope
-      prisma.$queryRaw<CountRow[]>`
-        SELECT COUNT(DISTINCT "projectId") AS count
-        FROM "Event"
-        WHERE ${scope.sql.currentEvent}
-      `,
-
-      // Top 10 event names by count
-      prisma.$queryRaw<TopEventRow[]>`
-        SELECT name, COUNT(*) AS count
-        FROM "Event"
-        WHERE ${scope.sql.currentEvent}
-        GROUP BY name
-        ORDER BY count DESC
-        LIMIT 10
-      `,
-
-      // Event counts per project (join to get name)
-      prisma.$queryRaw<ProjectEventRow[]>`
-        SELECT e."projectId", p.name AS "projectName", COUNT(*) AS count
-        FROM "Event" e
-        JOIN "Project" p ON p.id = e."projectId"
-        WHERE ${scope.sql.currentAliasedEvent}
-        GROUP BY e."projectId", p.name
-        ORDER BY count DESC
-        LIMIT 10
-      `,
-
-      // 10 most recent events with project name
-      prisma.$queryRaw<RecentEventRow[]>`
-        SELECT e.id, e.name, p.name AS "projectName", e."createdAt"
-        FROM "Event" e
-        JOIN "Project" p ON p.id = e."projectId"
-        WHERE ${scope.sql.currentAliasedEvent}
-        ORDER BY e."createdAt" DESC
-        LIMIT 10
-      `,
-
-      // Top-level property keys used across events (no nested traversal —
-      // just the top-level jsonb keys, kept simple on purpose)
-      prisma.$queryRaw<PropertyKeyRow[]>`
-        SELECT key, COUNT(*) AS count
-        FROM "Event" e, jsonb_object_keys(e.properties) AS key
-        WHERE ${scope.sql.currentAliasedEvent}
-        GROUP BY key
-        ORDER BY count DESC
-        LIMIT 10
-      `,
-
-      // Continuous, zero-filled trend buckets for the planned window/granularity
-      buildTrendQuery(),
-
-      // Current vs previous period totals, for growth/drop insights
-      buildPeriodComparisonQuery(),
-
-      // Total ACTIVE projects owned by the user, for the inactive-project
-      // insight. Only meaningful for the all-projects scope.
-      scope.projectId
-        ? Promise.resolve([] as CountRow[])
-        : prisma.$queryRaw<CountRow[]>`
-            SELECT COUNT(*) AS count
-            FROM "Project"
-            WHERE ${scope.sql.ownedProject} AND status = 'ACTIVE'
-          `,
+      fetchEventActivity(scope),
+      fetchTrend(scope, trendGranularity),
+      fetchPeriodComparison(scope),
 
       // Commerce funnel + friction counts, grouped by lowered event name so
       // alias matching is case-insensitive. Same project/range scope as the
@@ -1479,7 +1177,7 @@ export async function getAnalyticsSummaryController(
       `,
     ]);
 
-    const scopedTotal = toCount(totalResult[0]?.count);
+    const scopedTotal = eventActivity.totalEvents;
 
     // Average events per day across the scoped window.
     let avgEventsPerDay = 0;
@@ -1488,44 +1186,27 @@ export async function getAnalyticsSummaryController(
       avgEventsPerDay = roundPct(scopedTotal / days);
     }
 
-    const mappedTrendPoints = trendPoints.map((r) => ({
-      date: r.bucket,
-      count: toCount(r.count),
-    }));
-    const mappedTopEvents = topEvents.map((r) => ({
-      name: r.name,
-      count: toCount(r.count),
-      percentage: percentageOfTotal(toCount(r.count), scopedTotal),
-    }));
-    const mappedEventsByProject = eventsByProject.map((r) => ({
-      projectId: r.projectId,
-      projectName: r.projectName,
-      count: toCount(r.count),
-      percentage: percentageOfTotal(toCount(r.count), scopedTotal),
-    }));
+    const mappedTrendPoints = trendPoints;
+    const mappedTopEvents = eventActivity.topEvents;
+    const mappedEventsByProject = eventActivity.eventsByProject;
 
     const insights = buildInsights({
       scopedTotal,
       projectId: scope.projectId,
-      periodComparison: periodComparison[0],
+      periodComparison,
       trendPoints: mappedTrendPoints,
       topEvents: mappedTopEvents,
       eventsByProject: mappedEventsByProject,
-      activeProjectsWithEvents: toCount(activeProjectsResult[0]?.count),
-      totalActiveProjects: scope.projectId
-        ? null
-        : toCount(totalActiveProjectsResult[0]?.count),
+      activeProjectsWithEvents: eventActivity.activeProjects,
+      totalActiveProjects: eventActivity.totalActiveProjects,
     });
 
-    const comparison = buildComparison(
-      periodComparison[0],
-      scope.comparison.label,
-    );
+    const comparison = buildComparison(periodComparison, scope.comparison.label);
 
     const health = buildHealth({
       scopedTotal,
-      eventsToday: toCount(todayResult[0]?.count),
-      uniqueEventNames: toCount(uniqueNamesResult[0]?.count),
+      eventsToday: eventActivity.eventsToday,
+      uniqueEventNames: eventActivity.uniqueEventNames,
       checkTodayActivity: scope.checkTodayActivity,
       projectId: scope.projectId,
       topEvent: mappedTopEvents[0],
@@ -1553,9 +1234,9 @@ export async function getAnalyticsSummaryController(
       data: {
         summary: {
           totalEvents: scopedTotal,
-          eventsToday: toCount(todayResult[0]?.count),
-          uniqueEventNames: toCount(uniqueNamesResult[0]?.count),
-          activeProjects: toCount(activeProjectsResult[0]?.count),
+          eventsToday: eventActivity.eventsToday,
+          uniqueEventNames: eventActivity.uniqueEventNames,
+          activeProjects: eventActivity.activeProjects,
           avgEventsPerDay,
         },
         trend: {
@@ -1564,16 +1245,8 @@ export async function getAnalyticsSummaryController(
         },
         topEvents: mappedTopEvents,
         eventsByProject: mappedEventsByProject,
-        recentActivity: recentActivity.map((r) => ({
-          id: r.id,
-          name: r.name,
-          projectName: r.projectName,
-          createdAt: r.createdAt,
-        })),
-        topProperties: topProperties.map((r) => ({
-          key: r.key,
-          count: toCount(r.count),
-        })),
+        recentActivity: eventActivity.recentActivity,
+        topProperties: eventActivity.topProperties,
         insights,
         comparison,
         health,
