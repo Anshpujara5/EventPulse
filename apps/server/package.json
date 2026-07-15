@@ -11,7 +11,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed:commerce-demo": "tsx scripts/seedCommerceDemoData.ts"
+    "seed:commerce-demo": "tsx scripts/seedCommerceDemoData.ts",
+    "bench:seed": "tsx scripts/benchmark/seed-benchmark-data.ts",
+    "bench:cleanup": "tsx scripts/benchmark/cleanup-benchmark-data.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.0.0",

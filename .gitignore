@@ -51,3 +51,7 @@ next-env.d.ts
 # dependencies in any folder
 node_modules/
 **/node_modules/
+
+# benchmark outputs
+/benchmarks/results/
+/benchmarks/dataset-manifest.json
