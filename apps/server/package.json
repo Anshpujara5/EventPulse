@@ -12,10 +12,12 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed:commerce-demo": "tsx scripts/seedCommerceDemoData.ts",
-    "bench:seed": "tsx scripts/benchmark/seed-benchmark-data.ts",
-    "bench:cleanup": "tsx scripts/benchmark/cleanup-benchmark-data.ts",
+    "bench:seed": "bun scripts/benchmark/seed-benchmark-data.ts",
+    "bench:cleanup": "bun scripts/benchmark/cleanup-benchmark-data.ts",
     "bench:run": "bun scripts/benchmark/run-benchmarks.ts",
-    "bench:typecheck": "tsc --noEmit --strict --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck scripts/benchmark/guard.ts scripts/benchmark/benchmark-types.ts scripts/benchmark/benchmark-utils.ts scripts/benchmark/run-benchmarks.ts"
+    "bench:explain": "bun scripts/benchmark/explain-analytics.ts",
+    "bench:compare": "bun scripts/benchmark/compare-baselines.ts",
+    "bench:typecheck": "tsc --noEmit --strict --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck scripts/benchmark/guard.ts scripts/benchmark/benchmark-types.ts scripts/benchmark/benchmark-utils.ts scripts/benchmark/run-benchmarks.ts scripts/benchmark/explain-types.ts scripts/benchmark/explain-query-registry.ts scripts/benchmark/explain-analytics.ts scripts/benchmark/compare-baselines.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.0.0",
