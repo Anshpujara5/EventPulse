@@ -42,28 +42,37 @@ export function AlertsOverview() {
   const [deleteTarget, setDeleteTarget] = useState<Alert | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  async function loadAlerts() {
-    try {
-      setError("");
-      setIsLoading(true);
-      const res = await apiRequest<AlertsResponse>("/api/alerts", {
-        headers: authHeaders(),
+  function loadAlerts() {
+    return Promise.resolve()
+      .then(() =>
+        apiRequest<AlertsResponse>("/api/alerts", {
+          headers: authHeaders(),
+        }),
+      )
+      .then((res) => {
+        setAlerts(res.data.alerts);
+      })
+      .catch((requestError: unknown) => {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load alerts",
+        );
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
-      setAlerts(res.data.alerts);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load alerts",
-      );
-    } finally {
-      setIsLoading(false);
-    }
   }
 
   useEffect(() => {
     void loadAlerts();
   }, []);
+
+  function retryAlerts() {
+    setError("");
+    setIsLoading(true);
+    void loadAlerts();
+  }
 
   const filteredAlerts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -181,7 +190,7 @@ export function AlertsOverview() {
             <p className="text-sm font-bold text-rose-300">{error}</p>
             <button
               className="mt-4 rounded-xl border border-slate-700/80 bg-slate-950/35 px-4 py-2 text-sm font-bold text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-300"
-              onClick={() => void loadAlerts()}
+              onClick={retryAlerts}
               type="button"
             >
               Try again

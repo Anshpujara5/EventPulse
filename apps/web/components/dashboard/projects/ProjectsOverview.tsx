@@ -83,37 +83,46 @@ export function ProjectsOverview() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("updated");
 
-  async function fetchProjects() {
+  function fetchProjects() {
     const token = localStorage.getItem("eventpulse_token");
 
     if (!token) {
-      setError("You need to sign in to view projects.");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      setError("");
-      setIsLoading(true);
-
-      const response = await apiRequest<ProjectsResponse>("/api/projects", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      return Promise.resolve().then(() => {
+        setError("You need to sign in to view projects.");
+        setIsLoading(false);
       });
-
-      setProjects(response.data.projects);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load projects");
-    } finally {
-      setIsLoading(false);
     }
+
+    return apiRequest<ProjectsResponse>("/api/projects", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((response) => {
+        setProjects(response.data.projects);
+      })
+      .catch((requestError: unknown) => {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load projects",
+        );
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }
 
   useEffect(() => {
     void fetchProjects();
   }, []);
+
+  function retryProjects() {
+    setError("");
+    setIsLoading(true);
+    void fetchProjects();
+  }
 
   const filteredProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -319,7 +328,7 @@ export function ProjectsOverview() {
             <p className="text-sm font-bold text-rose-300">{error}</p>
             <button
               className="mt-4 rounded-xl border border-slate-700/80 bg-slate-950/35 px-4 py-2 text-sm font-bold text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-300"
-              onClick={() => void fetchProjects()}
+              onClick={retryProjects}
               type="button"
             >
               Try again

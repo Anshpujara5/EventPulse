@@ -1,5 +1,6 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import Link from "next/link";
 
 export function EmptyDashboard() {
   return (
@@ -13,12 +14,12 @@ export function EmptyDashboard() {
         commerce events.
       </p>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-        <a
+        <Link
           className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-cyan-400"
           href="/dashboard/projects"
         >
           Create a Project
-        </a>
+        </Link>
         <a
           className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-bold text-slate-300 hover:border-slate-600 hover:text-white"
           href="/dashboard/api-keys"

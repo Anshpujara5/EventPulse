@@ -8,9 +8,12 @@ import type { Project } from "./ProjectCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
-type LoadStatus = "loading" | "notFound" | "error" | "success";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type ProjectStatus = "ACTIVE" | "INACTIVE";
+
+type LoadResult =
+  | { projectId: string; status: "notFound" | "success" }
+  | { message: string; projectId: string; status: "error" };
 
 interface FormValues {
   name: string;
@@ -28,8 +31,7 @@ function authHeaders(): Record<string, string> {
 }
 
 export function ProjectSettings({ projectId }: { projectId: string }) {
-  const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
-  const [loadError, setLoadError] = useState("");
+  const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
   const [form, setForm] = useState<FormValues>({
     name: "",
     domain: "",
@@ -47,46 +49,63 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
   const [lifecycleStatus, setLifecycleStatus] = useState<SaveStatus>("idle");
   const [lifecycleError, setLifecycleError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoadStatus("loading");
-    setLoadError("");
+  const load = useCallback(() => {
+    return Promise.resolve()
+      .then(() =>
+        fetch(`${API_BASE}/api/projects/${projectId}`, {
+          headers: authHeaders(),
+        }),
+      )
+      .then(async (res) => {
+        if (res.status === 404) {
+          setLoadResult({ projectId, status: "notFound" });
+          return;
+        }
 
-    try {
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}`, {
-        headers: authHeaders(),
+        if (!res.ok) {
+          const body = (await res.json()) as { message?: string };
+          setLoadResult({
+            message: body.message ?? "Failed to load project",
+            projectId,
+            status: "error",
+          });
+          return;
+        }
+
+        const body = (await res.json()) as { data: { project: Project } };
+        const project = body.data.project;
+        setForm({
+          name: project.name,
+          domain: project.domain,
+          status: project.status,
+          description: project.description ?? "",
+        });
+        setPersistedStatus(project.status);
+        setLoadResult({ projectId, status: "success" });
+      })
+      .catch(() => {
+        setLoadResult({
+          message: "Could not reach server",
+          projectId,
+          status: "error",
+        });
       });
-
-      if (res.status === 404) {
-        setLoadStatus("notFound");
-        return;
-      }
-
-      if (!res.ok) {
-        const body = (await res.json()) as { message?: string };
-        setLoadError(body.message ?? "Failed to load project");
-        setLoadStatus("error");
-        return;
-      }
-
-      const body = (await res.json()) as { data: { project: Project } };
-      const project = body.data.project;
-      setForm({
-        name: project.name,
-        domain: project.domain,
-        status: project.status,
-        description: project.description ?? "",
-      });
-      setPersistedStatus(project.status);
-      setLoadStatus("success");
-    } catch {
-      setLoadError("Could not reach server");
-      setLoadStatus("error");
-    }
   }, [projectId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const currentLoadResult =
+    loadResult?.projectId === projectId ? loadResult : null;
+  const loadStatus = currentLoadResult?.status ?? "loading";
+  const loadError =
+    currentLoadResult?.status === "error" ? currentLoadResult.message : "";
+
+  function retryLoad() {
+    setLoadResult(null);
+    void load();
+  }
 
   function setField<K extends keyof FormValues>(key: K, value: FormValues[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -249,7 +268,7 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
           <p className="text-rose-400">{loadError || "Failed to load project"}</p>
           <button
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
-            onClick={() => void load()}
+            onClick={retryLoad}
             type="button"
           >
             Retry

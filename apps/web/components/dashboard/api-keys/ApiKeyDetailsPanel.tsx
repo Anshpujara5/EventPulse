@@ -1,6 +1,5 @@
 "use client";
 
-import { Icon } from "@/components/common/Icon";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ApiKey } from "./api-key-types";

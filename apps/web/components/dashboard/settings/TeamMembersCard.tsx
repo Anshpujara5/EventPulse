@@ -32,7 +32,7 @@ export function TeamMembersCard() {
           Team management is not connected yet
         </p>
         <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-slate-600">
-          Multi-user support is coming soon. You'll be able to invite and manage team members here once the feature is available.
+          Multi-user support is coming soon. You&apos;ll be able to invite and manage team members here once the feature is available.
         </p>
       </div>
     </GlowCard>

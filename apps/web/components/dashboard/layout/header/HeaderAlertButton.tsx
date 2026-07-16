@@ -41,11 +41,10 @@ export function HeaderAlertButton() {
 
   // Fetch real triggers the first time the panel is opened.
   useEffect(() => {
-    if (!isOpen || loadState !== "idle") {
+    if (!isOpen || loadState !== "loading") {
       return;
     }
 
-    setLoadState("loading");
     apiRequest<AlertTriggersResponse>("/api/alerts/triggers", {
       headers: authHeaders(),
     })
@@ -58,6 +57,14 @@ export function HeaderAlertButton() {
       });
   }, [isOpen, loadState]);
 
+  function togglePanel() {
+    const willOpen = !isOpen;
+    setIsOpen(willOpen);
+    if (willOpen && loadState === "idle") {
+      setLoadState("loading");
+    }
+  }
+
   return (
     <div className="relative" ref={wrapperRef}>
       <button
@@ -65,7 +72,7 @@ export function HeaderAlertButton() {
         aria-haspopup="dialog"
         aria-label="Notifications"
         className="relative flex size-12 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-950/60 text-slate-200"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={togglePanel}
         type="button"
       >
         <Icon name="bell" className="size-5" />

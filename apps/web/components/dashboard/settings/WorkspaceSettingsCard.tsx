@@ -65,20 +65,17 @@ const FIELDS: FieldConfig[] = [
 ];
 
 export function WorkspaceSettingsCard() {
-  const [saved, setSaved] = useState<WorkspaceValues>(EMPTY_DEFAULTS);
-  const [draft, setDraft] = useState<WorkspaceValues>(EMPTY_DEFAULTS);
+  const [initialValues] = useState<WorkspaceValues>(
+    () => loadFromStorage() ?? EMPTY_DEFAULTS,
+  );
+  const [saved, setSaved] = useState<WorkspaceValues>(initialValues);
+  const [draft, setDraft] = useState<WorkspaceValues>(initialValues);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // 1. Load from localStorage
-    const stored = loadFromStorage();
-    const base = stored ?? EMPTY_DEFAULTS;
-    setSaved(base);
-    setDraft(base);
-
-    // 2. If defaultProject not already saved, seed from real projects API
-    if (!base.defaultProject) {
+    // If defaultProject is not already saved, seed from the real projects API.
+    if (!initialValues.defaultProject) {
       const token = localStorage.getItem("eventpulse_token");
       if (!token) return;
 
@@ -106,7 +103,7 @@ export function WorkspaceSettingsCard() {
           // Silently ignore — field stays empty
         });
     }
-  }, []);
+  }, [initialValues.defaultProject]);
 
   const isDirty = !valuesEqual(draft, saved);
 

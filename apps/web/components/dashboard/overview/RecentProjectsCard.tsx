@@ -1,5 +1,6 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import Link from "next/link";
 import type { DashboardProject } from "./dashboard-types";
 
 function timeAgo(iso: string): string {
@@ -24,12 +25,12 @@ export function RecentProjectsCard({
     <GlowCard className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
         <h2 className="text-lg font-black">Recent Projects</h2>
-        <a
+        <Link
           className="text-sm font-bold text-cyan-300 hover:text-cyan-200"
           href="/dashboard/projects"
         >
           View all →
-        </a>
+        </Link>
       </div>
 
       {projects.length === 0 ? (
@@ -39,12 +40,12 @@ export function RecentProjectsCard({
             {emptyLabel ?? "No projects yet."}
           </p>
           {emptyLabel ? null : (
-            <a
+            <Link
               className="mt-1 text-sm font-bold text-cyan-400 hover:text-cyan-300"
               href="/dashboard/projects"
             >
               Create your first project →
-            </a>
+            </Link>
           )}
         </div>
       ) : (

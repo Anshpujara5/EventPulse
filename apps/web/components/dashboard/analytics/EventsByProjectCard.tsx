@@ -1,5 +1,6 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import Link from "next/link";
 import type { ProjectEventCount } from "./analytics-types";
 
 export function EventsByProjectCard({
@@ -55,12 +56,12 @@ export function EventsByProjectCard({
         </div>
       )}
 
-      <a
+      <Link
         className="mt-3 block text-right text-sm font-black text-cyan-400 hover:text-cyan-300"
         href="/dashboard/projects"
       >
         Manage projects →
-      </a>
+      </Link>
     </GlowCard>
   );
 }

@@ -10,7 +10,9 @@ import type { Project } from "./ProjectCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
-type Status = "loading" | "notFound" | "error" | "success";
+type LoadResult =
+  | { projectId: string; status: "notFound" | "success" }
+  | { message: string; projectId: string; status: "error" };
 
 interface ProjectSummary {
   totalEvents: number;
@@ -43,87 +45,103 @@ function authHeaders(): Record<string, string> {
 }
 
 export function ProjectView({ projectId }: { projectId: string }) {
-  const [status, setStatus] = useState<Status>("loading");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setStatus("loading");
-    setErrorMsg("");
+  const load = useCallback(() => {
     const headers = authHeaders();
 
-    try {
-      const projectRes = await fetch(
-        `${API_BASE}/api/projects/${projectId}`,
-        { headers },
-      );
-
-      if (projectRes.status === 404) {
-        setStatus("notFound");
-        return;
-      }
-
-      if (!projectRes.ok) {
-        const body = (await projectRes.json()) as { message?: string };
-        setErrorMsg(body.message ?? "Failed to load project");
-        setStatus("error");
-        return;
-      }
-
-      const projectBody = (await projectRes.json()) as {
-        data: { project: Project };
-      };
-      setProject(projectBody.data.project);
-
-      // Counts + related lists reuse existing endpoints (api-keys is filtered
-      // client-side; events is scoped by projectId on the backend).
-      const [summaryRes, keysRes, eventsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/projects/${projectId}/summary`, { headers }),
-        fetch(`${API_BASE}/api/api-keys`, { headers }),
-        fetch(`${API_BASE}/api/events?projectId=${projectId}&limit=10`, {
-          headers,
-        }),
-      ]);
-
-      if (summaryRes.ok) {
-        const body = (await summaryRes.json()) as {
-          data: { summary: ProjectSummary };
-        };
-        setSummary(body.data.summary);
-      } else {
-        setSummary(null);
-      }
-
-      if (keysRes.ok) {
-        const body = (await keysRes.json()) as {
-          data: { apiKeys: ApiKey[] };
-        };
-        setApiKeys(
-          body.data.apiKeys.filter((key) => key.project.id === projectId),
+    return Promise.resolve()
+      .then(async () => {
+        const projectRes = await fetch(
+          `${API_BASE}/api/projects/${projectId}`,
+          { headers },
         );
-      }
 
-      if (eventsRes.ok) {
-        const body = (await eventsRes.json()) as {
-          data: { events: EventRecord[] };
+        if (projectRes.status === 404) {
+          setLoadResult({ projectId, status: "notFound" });
+          return;
+        }
+
+        if (!projectRes.ok) {
+          const body = (await projectRes.json()) as { message?: string };
+          setLoadResult({
+            message: body.message ?? "Failed to load project",
+            projectId,
+            status: "error",
+          });
+          return;
+        }
+
+        const projectBody = (await projectRes.json()) as {
+          data: { project: Project };
         };
-        setEvents(body.data.events);
-      }
+        setProject(projectBody.data.project);
 
-      setStatus("success");
-    } catch {
-      setErrorMsg("Could not reach server");
-      setStatus("error");
-    }
+        // Counts + related lists reuse existing endpoints (api-keys is filtered
+        // client-side; events is scoped by projectId on the backend).
+        const [summaryRes, keysRes, eventsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/projects/${projectId}/summary`, { headers }),
+          fetch(`${API_BASE}/api/api-keys`, { headers }),
+          fetch(`${API_BASE}/api/events?projectId=${projectId}&limit=10`, {
+            headers,
+          }),
+        ]);
+
+        if (summaryRes.ok) {
+          const body = (await summaryRes.json()) as {
+            data: { summary: ProjectSummary };
+          };
+          setSummary(body.data.summary);
+        } else {
+          setSummary(null);
+        }
+
+        if (keysRes.ok) {
+          const body = (await keysRes.json()) as {
+            data: { apiKeys: ApiKey[] };
+          };
+          setApiKeys(
+            body.data.apiKeys.filter((key) => key.project.id === projectId),
+          );
+        }
+
+        if (eventsRes.ok) {
+          const body = (await eventsRes.json()) as {
+            data: { events: EventRecord[] };
+          };
+          setEvents(body.data.events);
+        }
+
+        setLoadResult({ projectId, status: "success" });
+      })
+      .catch(() => {
+        setLoadResult({
+          message: "Could not reach server",
+          projectId,
+          status: "error",
+        });
+      });
   }, [projectId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const currentLoadResult =
+    loadResult?.projectId === projectId ? loadResult : null;
+  const status = currentLoadResult?.status ?? "loading";
+  const errorMsg =
+    currentLoadResult?.status === "error" ? currentLoadResult.message : "";
+
+  function retryLoad() {
+    setLoadResult(null);
+    void load();
+  }
 
   function copy(id: string, text: string) {
     void navigator.clipboard.writeText(text).then(() => {
@@ -186,7 +204,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
           <p className="text-rose-400">{errorMsg || "Failed to load project"}</p>
           <button
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
-            onClick={() => void load()}
+            onClick={retryLoad}
             type="button"
           >
             Retry

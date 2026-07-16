@@ -125,40 +125,48 @@ export function ApiKeysOverview() {
     };
   }, []);
 
-  const loadData = useCallback(async () => {
-    try {
-      setError("");
-      setIsLoading(true);
-      const headers = getAuthHeaders();
-      const [apiKeysResponse, projectsResponse] = await Promise.all([
-        apiRequest<ApiKeysResponse>("/api/api-keys", { headers }),
-        apiRequest<ProjectsResponse>("/api/projects", { headers }),
-      ]);
-
-      setApiKeys(apiKeysResponse.data.apiKeys);
-      setProjects(projectsResponse.data.projects);
-      // Keep the details drawer open on the same key across a refresh, but
-      // don't auto-open one — the drawer is opt-in via "View" now.
-      setSelectedApiKeyId((currentId) =>
-        currentId &&
-        apiKeysResponse.data.apiKeys.some((apiKey) => apiKey.id === currentId)
-          ? currentId
-          : undefined,
-      );
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load API keys",
-      );
-    } finally {
-      setIsLoading(false);
-    }
+  const loadData = useCallback(() => {
+    return Promise.resolve()
+      .then(() => {
+        const headers = getAuthHeaders();
+        return Promise.all([
+          apiRequest<ApiKeysResponse>("/api/api-keys", { headers }),
+          apiRequest<ProjectsResponse>("/api/projects", { headers }),
+        ]);
+      })
+      .then(([apiKeysResponse, projectsResponse]) => {
+        setApiKeys(apiKeysResponse.data.apiKeys);
+        setProjects(projectsResponse.data.projects);
+        // Keep the details drawer open on the same key across a refresh, but
+        // don't auto-open one — the drawer is opt-in via "View" now.
+        setSelectedApiKeyId((currentId) =>
+          currentId &&
+          apiKeysResponse.data.apiKeys.some((apiKey) => apiKey.id === currentId)
+            ? currentId
+            : undefined,
+        );
+      })
+      .catch((requestError: unknown) => {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load API keys",
+        );
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, [getAuthHeaders]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  function retryLoadData() {
+    setError("");
+    setIsLoading(true);
+    void loadData();
+  }
 
   // The header project selector is the global scope; the page's own project
   // filter narrows further within that scope.
@@ -409,7 +417,7 @@ export function ApiKeysOverview() {
             isLoading={isLoading}
             isRevoking={isRevoking}
             onCreateClick={handleOpenCreate}
-            onRetry={loadData}
+            onRetry={retryLoadData}
             onRevoke={handleRevokeApiKey}
             onSelect={setSelectedApiKeyId}
             selectedApiKeyId={selectedApiKey?.id}

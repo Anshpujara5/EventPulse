@@ -24,42 +24,49 @@ export function DashboardOverview() {
     useDashboardHeaderState();
   const [state, setState] = useState<FetchState>({ status: "loading" });
 
-  async function fetchSummary() {
-    setState({ status: "loading" });
-    try {
-      const token =
-        typeof window !== "undefined"
-          ? localStorage.getItem("eventpulse_token")
-          : null;
+  function fetchSummary() {
+    return Promise.resolve()
+      .then(() => {
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem("eventpulse_token")
+            : null;
 
-      const res = await fetch(`${API_BASE}/api/dashboard/summary`, {
-        headers: {
-          Authorization: `Bearer ${token ?? ""}`,
-        },
-      });
-
-      if (!res.ok) {
-        const body = (await res.json()) as { message?: string };
-        setState({
-          status: "error",
-          message: body.message ?? "Failed to load dashboard",
+        return fetch(`${API_BASE}/api/dashboard/summary`, {
+          headers: {
+            Authorization: `Bearer ${token ?? ""}`,
+          },
         });
-        return;
-      }
+      })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = (await res.json()) as { message?: string };
+          setState({
+            status: "error",
+            message: body.message ?? "Failed to load dashboard",
+          });
+          return;
+        }
 
-      const body = (await res.json()) as {
-        success: boolean;
-        data: { summary: DashboardSummary };
-      };
-      setState({ status: "success", data: body.data.summary });
-    } catch {
-      setState({ status: "error", message: "Could not reach server" });
-    }
+        const body = (await res.json()) as {
+          success: boolean;
+          data: { summary: DashboardSummary };
+        };
+        setState({ status: "success", data: body.data.summary });
+      })
+      .catch(() => {
+        setState({ status: "error", message: "Could not reach server" });
+      });
   }
 
   useEffect(() => {
     void fetchSummary();
   }, []);
+
+  function retrySummary() {
+    setState({ status: "loading" });
+    void fetchSummary();
+  }
 
   const isEmpty =
     state.status === "success" &&
@@ -141,7 +148,7 @@ export function DashboardOverview() {
           <p className="text-rose-400">{state.message}</p>
           <button
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
-            onClick={() => void fetchSummary()}
+            onClick={retrySummary}
             type="button"
           >
             Retry
