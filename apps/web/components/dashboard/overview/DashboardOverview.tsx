@@ -5,6 +5,7 @@ import {
   ALL_PROJECTS_ID,
   useDashboardHeaderState,
 } from "@/components/dashboard/layout/header/DashboardHeaderContext";
+import { API_BASE, getAuthHeaders } from "@/lib/api";
 import type { DashboardSummary } from "./dashboard-types";
 import { DashboardStats } from "./DashboardStats";
 import { EmptyDashboard } from "./EmptyDashboard";
@@ -17,8 +18,6 @@ type FetchState =
   | { status: "error"; message: string }
   | { status: "success"; data: DashboardSummary };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
-
 export function DashboardOverview() {
   const { searchQuery, selectedProjectId, selectedProject } =
     useDashboardHeaderState();
@@ -27,15 +26,8 @@ export function DashboardOverview() {
   function fetchSummary() {
     return Promise.resolve()
       .then(() => {
-        const token =
-          typeof window !== "undefined"
-            ? localStorage.getItem("eventpulse_token")
-            : null;
-
         return fetch(`${API_BASE}/api/dashboard/summary`, {
-          headers: {
-            Authorization: `Bearer ${token ?? ""}`,
-          },
+          headers: getAuthHeaders(),
         });
       })
       .then(async (res) => {

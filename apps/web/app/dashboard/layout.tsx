@@ -3,7 +3,7 @@
 import { DashboardHeader } from "@/components/dashboard/layout/DashboardHeader";
 import { DashboardHeaderProvider } from "@/components/dashboard/layout/header/DashboardHeaderContext";
 import { DashboardSidebar } from "@/components/dashboard/layout/DashboardSidebar";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAuthHeaders } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -40,9 +40,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       try {
         const response = await apiRequest<MeResponse>("/api/auth/me", {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: getAuthHeaders(),
         });
 
         if (isActive) {

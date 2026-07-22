@@ -3,7 +3,7 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
 import { useDashboardHeaderState } from "@/components/dashboard/layout/header/DashboardHeaderContext";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAuthHeaders } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { AlertFormModal } from "./AlertFormModal";
 import type { Alert, AlertMutationResponse, AlertsResponse } from "./alert-types";
@@ -14,14 +14,6 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("eventpulse_token")
-      : null;
-  return { Authorization: `Bearer ${token ?? ""}` };
 }
 
 // The alert form modal is shown either for creating a new alert ("new") or
@@ -46,7 +38,7 @@ export function AlertsOverview() {
     return Promise.resolve()
       .then(() =>
         apiRequest<AlertsResponse>("/api/alerts", {
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
         }),
       )
       .then((res) => {
@@ -104,7 +96,7 @@ export function AlertsOverview() {
         `/api/alerts/${alert.id}`,
         {
           method: "PATCH",
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
           body: JSON.stringify({ status: nextStatus }),
         },
       );
@@ -130,7 +122,7 @@ export function AlertsOverview() {
       setIsDeleting(true);
       await apiRequest<{ success: boolean }>(
         `/api/alerts/${deleteTarget.id}`,
-        { method: "DELETE", headers: authHeaders() },
+        { method: "DELETE", headers: getAuthHeaders() },
       );
       setAlerts((current) =>
         current.filter((alert) => alert.id !== deleteTarget.id),

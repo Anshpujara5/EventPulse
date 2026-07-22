@@ -2,6 +2,7 @@
 
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import { API_BASE, getAuthHeaders } from "@/lib/api";
 import { useEffect, useRef, useState } from "react";
 
 interface WorkspaceValues {
@@ -20,7 +21,6 @@ const EMPTY_DEFAULTS: WorkspaceValues = {
 };
 
 const STORAGE_KEY = "ep_workspace_settings";
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
 type SaveStatus = "idle" | "saving" | "saved";
 
@@ -80,7 +80,7 @@ export function WorkspaceSettingsCard() {
       if (!token) return;
 
       fetch(`${API_BASE}/api/projects`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: getAuthHeaders(),
       })
         .then((r) => r.json())
         .then(

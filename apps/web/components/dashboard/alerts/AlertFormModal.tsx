@@ -4,7 +4,7 @@ import type {
   Project,
   ProjectsResponse,
 } from "@/components/dashboard/api-keys/api-key-types";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAuthHeaders } from "@/lib/api";
 import { FormEvent, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Alert, AlertMutationResponse } from "./alert-types";
@@ -28,14 +28,6 @@ const emptyForm: AlertFormValues = {
 function positiveInt(value: string): number | null {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("eventpulse_token")
-      : null;
-  return { Authorization: `Bearer ${token ?? ""}` };
 }
 
 /**
@@ -71,7 +63,7 @@ export function AlertFormModal({
   useEffect(() => {
     let isActive = true;
 
-    apiRequest<ProjectsResponse>("/api/projects", { headers: authHeaders() })
+    apiRequest<ProjectsResponse>("/api/projects", { headers: getAuthHeaders() })
       .then((res) => {
         if (isActive) {
           setProjects(res.data.projects);
@@ -126,12 +118,12 @@ export function AlertFormModal({
       const res = alert
         ? await apiRequest<AlertMutationResponse>(`/api/alerts/${alert.id}`, {
             method: "PATCH",
-            headers: authHeaders(),
+            headers: getAuthHeaders(),
             body,
           })
         : await apiRequest<AlertMutationResponse>("/api/alerts", {
             method: "POST",
-            headers: authHeaders(),
+            headers: getAuthHeaders(),
             body,
           });
       onSaved(res.data.alert);

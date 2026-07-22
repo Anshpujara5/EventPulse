@@ -2,10 +2,9 @@
 
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import { API_BASE } from "@/lib/api";
 import Link from "next/link";
 import { useState } from "react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
 const INGEST_ENDPOINT = `${API_BASE}/api/events/ingest`;
 

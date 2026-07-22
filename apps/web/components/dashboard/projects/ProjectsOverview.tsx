@@ -4,7 +4,7 @@ import { FilterDropdown } from "@/components/common/FilterDropdown";
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
 import { useDashboardHeaderState } from "@/components/dashboard/layout/header/DashboardHeaderContext";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAuthHeaders } from "@/lib/api";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ProjectCard, type Project } from "./ProjectCard";
 
@@ -95,9 +95,7 @@ export function ProjectsOverview() {
 
     return apiRequest<ProjectsResponse>("/api/projects", {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: getAuthHeaders(),
     })
       .then((response) => {
         setProjects(response.data.projects);
@@ -230,9 +228,7 @@ export function ProjectsOverview() {
 
       const response = await apiRequest<CreateProjectResponse>("/api/projects", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           description: form.description.trim() || undefined,
           domain: form.domain.trim(),

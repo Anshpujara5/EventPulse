@@ -6,7 +6,7 @@ import type {
   AnalyticsTabDataMap,
 } from "@/components/dashboard/analytics/analytics-types";
 import type { AnalyticsTabId } from "@/components/dashboard/analytics/tabs/AnalyticsTabs";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAuthHeaders } from "@/lib/api";
 
 export type AnalyticsTabLoadState<T> =
   | { status: "loading" }
@@ -42,14 +42,13 @@ async function requestAnalyticsTab<T extends AnalyticsDataTabId>(
   tab: T,
   scopeQuery: string,
 ): Promise<AnalyticsTabDataMap[T]> {
-  const token = localStorage.getItem("eventpulse_token");
   const params = new URLSearchParams(scopeQuery);
   params.set("tab", tab);
 
   const body = await apiRequest<AnalyticsResponse<AnalyticsTabDataMap[T]>>(
     `/api/analytics/summary?${params.toString()}`,
     {
-      headers: { Authorization: `Bearer ${token ?? ""}` },
+      headers: getAuthHeaders(),
     },
   );
 

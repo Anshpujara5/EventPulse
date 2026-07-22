@@ -5,15 +5,13 @@ import {
   ALL_PROJECTS_ID,
   useDashboardHeaderState,
 } from "@/components/dashboard/layout/header/DashboardHeaderContext";
+import { API_BASE, getAuthHeaders } from "@/lib/api";
 import type { EventRecord, EventSummary } from "./event-types";
 import { EventDetailsDrawer } from "./EventDetailsDrawer";
 import { EventsEmptyState } from "./EventsEmptyState";
 import { EventsMetricCards } from "./EventsMetricCards";
 import { EventsSearchBar } from "./EventsSearchBar";
 import { EventsTable } from "./EventsTable";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
 type FetchState =
   | { status: "loading" }
@@ -34,11 +32,6 @@ export function EventsOverview() {
     async (nameFilter?: string) => {
       setState({ status: "loading" });
       try {
-        const token =
-          typeof window !== "undefined"
-            ? localStorage.getItem("eventpulse_token")
-            : null;
-
         const params = new URLSearchParams({ limit: "50" });
         if (nameFilter) params.set("name", nameFilter);
         // Scope to the globally selected project from the header, if any.
@@ -51,7 +44,7 @@ export function EventsOverview() {
         }
 
         const res = await fetch(`${API_BASE}/api/events?${params.toString()}`, {
-          headers: { Authorization: `Bearer ${token ?? ""}` },
+          headers: getAuthHeaders(),
         });
 
         if (!res.ok) {

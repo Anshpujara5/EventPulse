@@ -1,6 +1,6 @@
 "use client";
 
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAuthHeaders } from "@/lib/api";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import {
   createContext,
@@ -79,7 +79,7 @@ export function DashboardHeaderProvider({ children }: { children: ReactNode }) {
       try {
         const response = await apiRequest<ProjectsResponse>("/api/projects", {
           method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: getAuthHeaders(),
         });
 
         if (isActive) {

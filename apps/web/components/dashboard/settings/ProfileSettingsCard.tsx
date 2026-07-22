@@ -2,11 +2,10 @@
 
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import { API_BASE, getAuthHeaders, getJsonAuthHeaders } from "@/lib/api";
 import { useEffect, useRef, useState } from "react";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -28,7 +27,7 @@ export function ProfileSettingsCard() {
     if (!token) return;
 
     fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     })
       .then((r) => r.json())
       .then((body: { success: boolean; data?: { user?: { name?: string; email?: string } } }) => {
@@ -54,15 +53,10 @@ export function ProfileSettingsCard() {
     setStatus("saving");
     setErrorMsg("");
 
-    const token = localStorage.getItem("eventpulse_token");
-
     try {
       const res = await fetch(`${API_BASE}/api/auth/me`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token ?? ""}`,
-        },
+        headers: getJsonAuthHeaders(),
         body: JSON.stringify({ name: trimmed }),
       });
 

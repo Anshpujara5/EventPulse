@@ -2,11 +2,10 @@
 
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
+import { API_BASE, getAuthHeaders, getJsonAuthHeaders } from "@/lib/api";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { Project } from "./ProjectCard";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type ProjectStatus = "ACTIVE" | "INACTIVE";
@@ -20,14 +19,6 @@ interface FormValues {
   domain: string;
   status: ProjectStatus;
   description: string;
-}
-
-function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("eventpulse_token")
-      : null;
-  return { Authorization: `Bearer ${token ?? ""}` };
 }
 
 export function ProjectSettings({ projectId }: { projectId: string }) {
@@ -53,7 +44,7 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
     return Promise.resolve()
       .then(() =>
         fetch(`${API_BASE}/api/projects/${projectId}`, {
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
         }),
       )
       .then(async (res) => {
@@ -135,10 +126,7 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
     try {
       const res = await fetch(`${API_BASE}/api/projects/${projectId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeaders(),
-        },
+        headers: getJsonAuthHeaders(),
         body: JSON.stringify({
           name: form.name.trim(),
           domain: form.domain.trim(),
@@ -183,7 +171,7 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
         `${API_BASE}/api/projects/${projectId}/${action}`,
         {
           method: "PATCH",
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
         },
       );
 

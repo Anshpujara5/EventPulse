@@ -4,11 +4,10 @@ import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
 import type { ApiKey } from "@/components/dashboard/api-keys/api-key-types";
 import type { EventRecord } from "@/components/dashboard/events/event-types";
+import { API_BASE, getAuthHeaders } from "@/lib/api";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { Project } from "./ProjectCard";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5001";
 
 type LoadResult =
   | { projectId: string; status: "notFound" | "success" }
@@ -36,14 +35,6 @@ function formatDateTime(value: string) {
   });
 }
 
-function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("eventpulse_token")
-      : null;
-  return { Authorization: `Bearer ${token ?? ""}` };
-}
-
 export function ProjectView({ projectId }: { projectId: string }) {
   const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
   const [project, setProject] = useState<Project | null>(null);
@@ -53,7 +44,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const [copied, setCopied] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    const headers = authHeaders();
+    const headers = getAuthHeaders();
 
     return Promise.resolve()
       .then(async () => {

@@ -6,7 +6,7 @@ import type {
   AlertTriggersResponse,
 } from "@/components/dashboard/alerts/alert-types";
 import { useOutsideClick } from "@/hooks/useOutsideClick";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getAuthHeaders } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -19,14 +19,6 @@ function timeAgo(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
-}
-
-function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("eventpulse_token")
-      : null;
-  return { Authorization: `Bearer ${token ?? ""}` };
 }
 
 type LoadState = "idle" | "loading" | "loaded" | "error";
@@ -46,7 +38,7 @@ export function HeaderAlertButton() {
     }
 
     apiRequest<AlertTriggersResponse>("/api/alerts/triggers", {
-      headers: authHeaders(),
+      headers: getAuthHeaders(),
     })
       .then((res) => {
         setTriggers(res.data.triggers);
