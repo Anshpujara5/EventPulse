@@ -2,8 +2,9 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
+import { env } from "./env";
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = env.databaseUrl;
 
 if (!connectionString) {
   throw new Error("DATABASE_URL is required");
