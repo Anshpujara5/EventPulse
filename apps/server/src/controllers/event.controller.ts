@@ -2,9 +2,24 @@ import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import type { Request, Response } from "express";
 import { prisma } from "../config/prisma";
+import {
+  authenticateApiKey,
+  extractRawApiKey,
+} from "../ingestion/apiKeyAuth";
+import {
+  serializeProperties,
+  validateEventName,
+  validateIdempotencyKey,
+  validateProperties,
+} from "../ingestion/envelope";
+import {
+  findEventByIdempotencyKey,
+  isIdempotencyUniqueViolation,
+  resolveIdempotencyKey,
+} from "../ingestion/idempotency";
+import { validateShopperId } from "../ingestion/shopperIds";
 import type { AuthRequest } from "../middleware/auth.middleware";
 import { evaluateAlertsForEvent } from "../utils/alertEvaluation";
-import { hashApiKey } from "../utils/apiKey";
 import { checkRateLimit } from "../utils/rateLimit";
 import { rangeToInterval } from "../utils/timeRange";
 
@@ -32,71 +47,6 @@ interface EventRow {
   keyPrefix?: string;
 }
 
-interface ActiveApiKeyRow {
-  id: string;
-  userId: string;
-  projectId: string;
-  status: string;
-  projectStatus: string;
-}
-
-// ---------------------------------------------------------------------------
-// Ingestion validation limits
-// ---------------------------------------------------------------------------
-
-const MAX_EVENT_NAME_LENGTH = 120;
-// Serialized properties cap — a simple in-controller guard (Express also caps
-// the whole body at its default 100kb). No extra libraries required.
-const MAX_PROPERTIES_BYTES = 16 * 1024;
-const MAX_IDEMPOTENCY_KEY_LENGTH = 200;
-// Shopper identifiers (customerId/sessionId) share the same shape rules as
-// event names: trimmed, non-empty, capped, no control characters.
-const MAX_SHOPPER_ID_LENGTH = 120;
-// Reject control characters (newlines, tabs, null, etc.) in event names while
-// still allowing names like page_view, checkout.completed, user-signup.
-function hasControlChars(value: string): boolean {
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
-    if (code <= 0x1f || code === 0x7f) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Required shopper identifier (customerId / sessionId). Returns the trimmed
-// value, or an error message describing exactly which rule failed.
-function validateShopperId(
-  value: unknown,
-  field: "customerId" | "sessionId",
-): { value: string; error: null } | { value: null; error: string } {
-  if (typeof value !== "string") {
-    return { value: null, error: `${field} is required and must be a string` };
-  }
-
-  const trimmed = value.trim();
-
-  if (trimmed.length === 0) {
-    return { value: null, error: `${field} must not be empty` };
-  }
-
-  if (trimmed.length > MAX_SHOPPER_ID_LENGTH) {
-    return {
-      value: null,
-      error: `${field} must be between 1 and ${MAX_SHOPPER_ID_LENGTH} characters`,
-    };
-  }
-
-  if (hasControlChars(trimmed)) {
-    return {
-      value: null,
-      error: `${field} must not contain control characters`,
-    };
-  }
-
-  return { value: trimmed, error: null };
-}
-
 // ---------------------------------------------------------------------------
 // POST /api/events/ingest  — authenticated via raw API key (not JWT)
 // ---------------------------------------------------------------------------
@@ -104,16 +54,10 @@ function validateShopperId(
 export async function ingestEventController(req: Request, res: Response) {
   try {
     // 1. Extract raw key from Authorization or x-api-key header
-    const authHeader = req.headers.authorization;
-    const xApiKey = req.headers["x-api-key"];
-
-    let rawKey: string | undefined;
-
-    if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-      rawKey = authHeader.slice(7).trim();
-    } else if (typeof xApiKey === "string") {
-      rawKey = xApiKey.trim();
-    }
+    const rawKey = extractRawApiKey(
+      req.headers.authorization,
+      req.headers["x-api-key"],
+    );
 
     if (!rawKey) {
       return res.status(401).json({
@@ -123,24 +67,16 @@ export async function ingestEventController(req: Request, res: Response) {
     }
 
     // 2. Hash and look up
-    const keyHash = hashApiKey(rawKey);
+    const authentication = await authenticateApiKey(rawKey);
 
-    const [apiKeyRow] = await prisma.$queryRaw<ActiveApiKeyRow[]>`
-      SELECT a.id, a."userId", a."projectId", a.status, p.status AS "projectStatus"
-      FROM "ApiKey" a
-      JOIN "Project" p ON p.id = a."projectId"
-      WHERE a."keyHash" = ${keyHash}
-      LIMIT 1
-    `;
-
-    if (!apiKeyRow) {
+    if (authentication.status === "invalid") {
       return res.status(401).json({
         success: false,
         message: "Invalid API key",
       });
     }
 
-    if (apiKeyRow.status !== "ACTIVE") {
+    if (authentication.status === "revoked") {
       return res.status(403).json({
         success: false,
         message: "API key has been revoked",
@@ -150,13 +86,15 @@ export async function ingestEventController(req: Request, res: Response) {
     // Block ingestion for archived (inactive) projects. Reject before storing
     // the event or touching lastUsedAt — nothing is persisted for a paused
     // project. Restoring the project re-enables ingestion.
-    if (apiKeyRow.projectStatus !== "ACTIVE") {
+    if (authentication.status === "projectInactive") {
       return res.status(403).json({
         success: false,
         message:
           "Event ingestion is paused for this project. Restore the project to resume ingestion.",
       });
     }
+
+    const apiKeyRow = authentication.apiKey;
 
     // 3. Rate limit — per API key, in-memory. Rejected requests are not
     // stored and do not touch lastUsedAt or alert evaluation.
@@ -183,35 +121,15 @@ export async function ingestEventController(req: Request, res: Response) {
       idempotencyKey?: unknown;
     };
 
-    if (typeof name !== "string") {
+    const eventNameResult = validateEventName(name);
+    if (eventNameResult.error !== null) {
       return res.status(400).json({
         success: false,
-        message: "Event name is required and must be a string",
+        message: eventNameResult.error,
       });
     }
 
-    const eventName = name.trim();
-
-    if (eventName.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Event name must not be empty",
-      });
-    }
-
-    if (eventName.length > MAX_EVENT_NAME_LENGTH) {
-      return res.status(400).json({
-        success: false,
-        message: `Event name must be between 1 and ${MAX_EVENT_NAME_LENGTH} characters`,
-      });
-    }
-
-    if (hasControlChars(eventName)) {
-      return res.status(400).json({
-        success: false,
-        message: "Event name must not contain control characters",
-      });
-    }
+    const eventName = eventNameResult.value;
 
     // customerId/sessionId are required for all new events (the DB columns are
     // nullable only so rows ingested before these fields existed stay valid).
@@ -234,54 +152,37 @@ export async function ingestEventController(req: Request, res: Response) {
     const customerId = customerIdResult.value;
     const sessionId = sessionIdResult.value;
 
-    if (
-      properties !== undefined &&
-      (typeof properties !== "object" ||
-        properties === null ||
-        Array.isArray(properties))
-    ) {
+    const propertiesResult = validateProperties(properties);
+    if (propertiesResult.error !== null) {
       return res.status(400).json({
         success: false,
-        message: "properties must be a plain JSON object if provided",
+        message: propertiesResult.error,
       });
     }
 
-    const safeProperties =
-      properties !== undefined
-        ? (properties as Record<string, unknown>)
-        : {};
+    const safeProperties = propertiesResult.value;
 
     // 5. Resolve idempotency key — header takes precedence over body field.
-    const headerIdempotencyKey = req.headers["idempotency-key"];
-    const rawIdempotencyKey =
-      typeof headerIdempotencyKey === "string"
-        ? headerIdempotencyKey
-        : typeof bodyIdempotencyKey === "string"
-          ? bodyIdempotencyKey
-          : undefined;
-    const idempotencyKey = rawIdempotencyKey?.trim() || undefined;
+    const idempotencyKey = resolveIdempotencyKey(
+      req.headers["idempotency-key"],
+      bodyIdempotencyKey,
+    );
+    const idempotencyKeyError = validateIdempotencyKey(idempotencyKey);
 
-    if (idempotencyKey && idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
+    if (idempotencyKeyError !== null) {
       return res.status(400).json({
         success: false,
-        message: `Idempotency-Key must not exceed ${MAX_IDEMPOTENCY_KEY_LENGTH} characters`,
+        message: idempotencyKeyError,
       });
     }
 
     // 6. If this API key already used this idempotency key, return the
     // original event instead of creating a duplicate.
     if (idempotencyKey) {
-      const [existing] = await prisma.$queryRaw<
-        Pick<
-          EventRow,
-          "id" | "name" | "projectId" | "createdAt" | "customerId" | "sessionId"
-        >[]
-      >`
-        SELECT id, name, "projectId", "createdAt", "customerId", "sessionId"
-        FROM "Event"
-        WHERE "apiKeyId" = ${apiKeyRow.id} AND "idempotencyKey" = ${idempotencyKey}
-        LIMIT 1
-      `;
+      const existing = await findEventByIdempotencyKey(
+        apiKeyRow.id,
+        idempotencyKey,
+      );
 
       if (existing) {
         return res.status(200).json({
@@ -301,17 +202,16 @@ export async function ingestEventController(req: Request, res: Response) {
 
     // 7. Insert event
     const eventId = crypto.randomUUID();
-    const propertiesJson = JSON.stringify(safeProperties);
+    const propertiesJsonResult = serializeProperties(safeProperties);
 
-    if (propertiesJson.length > MAX_PROPERTIES_BYTES) {
+    if (propertiesJsonResult.error !== null) {
       return res.status(400).json({
         success: false,
-        message: `properties payload is too large (max ${
-          MAX_PROPERTIES_BYTES / 1024
-        }KB)`,
+        message: propertiesJsonResult.error,
       });
     }
 
+    const propertiesJson = propertiesJsonResult.value;
     const ipAddress = req.ip ?? req.socket.remoteAddress ?? null;
     const userAgentHeader = req.headers["user-agent"];
     const userAgent = typeof userAgentHeader === "string" ? userAgentHeader : null;
@@ -338,25 +238,11 @@ export async function ingestEventController(req: Request, res: Response) {
       // Unique violation on (apiKeyId, idempotencyKey) means a concurrent
       // request already inserted the same idempotency key — treat as a
       // duplicate rather than a failure.
-      const meta = error instanceof Prisma.PrismaClientKnownRequestError ? error.meta : undefined;
-      const isUniqueViolation =
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2010" &&
-        typeof meta?.code === "string" &&
-        meta.code === "23505";
-
-      if (idempotencyKey && isUniqueViolation) {
-        const [existing] = await prisma.$queryRaw<
-          Pick<
-            EventRow,
-            "id" | "name" | "projectId" | "createdAt" | "customerId" | "sessionId"
-          >[]
-        >`
-          SELECT id, name, "projectId", "createdAt", "customerId", "sessionId"
-          FROM "Event"
-          WHERE "apiKeyId" = ${apiKeyRow.id} AND "idempotencyKey" = ${idempotencyKey}
-          LIMIT 1
-        `;
+      if (idempotencyKey && isIdempotencyUniqueViolation(error)) {
+        const existing = await findEventByIdempotencyKey(
+          apiKeyRow.id,
+          idempotencyKey,
+        );
         if (existing) {
           return res.status(200).json({
             success: true,
