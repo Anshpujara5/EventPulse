@@ -12,6 +12,7 @@ import {
   validateIdempotencyKey,
   validateProperties,
 } from "../ingestion/envelope";
+import { collectContractWarnings } from "../ingestion/contractWarnings";
 import {
   findEventByIdempotencyKey,
   isIdempotencyUniqueViolation,
@@ -289,6 +290,11 @@ export async function ingestEventController(req: Request, res: Response) {
       WHERE id = ${eventId}
     `;
 
+    const contractWarnings = collectContractWarnings({
+      name: eventName,
+      properties: safeProperties,
+    });
+
     return res.status(201).json({
       success: true,
       duplicate: false,
@@ -300,6 +306,9 @@ export async function ingestEventController(req: Request, res: Response) {
         customerId: createdEvent.customerId ?? null,
         sessionId: createdEvent.sessionId ?? null,
       },
+      ...(contractWarnings.length > 0
+        ? { warnings: contractWarnings }
+        : {}),
     });
   } catch (error) {
     console.error("[ingestEvent]", error);
