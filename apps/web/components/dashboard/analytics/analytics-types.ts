@@ -242,6 +242,9 @@ export interface OverviewTabData {
   insights: AnalyticsInsight[];
   comparison: PeriodComparison;
   health: AnalyticsHealth;
+  orders: OverviewOrdersKpi;
+  gmv: OverviewGmvKpi;
+  aov: OverviewAovKpi;
 }
 
 export interface ConversionTabData {
@@ -356,6 +359,48 @@ export interface SalesMoneyComparison extends SalesMetricComparison {
   currentMoneyBearingOrders: number;
   previousMoneyBearingOrders: number;
 }
+
+export type OverviewOrdersKpi = SalesOrdersMeasurement & {
+  comparison: SalesOrdersComparison | null;
+};
+
+export type OverviewGmvKpi =
+  | {
+      status: "available";
+      value: number;
+      currency: string;
+      otherCurrencyOrders: number;
+      otherCurrencyCount: number;
+      comparison: SalesMoneyComparison | null;
+      unlockGuidance: null;
+    }
+  | {
+      status: "unavailable";
+      value: null;
+      currency: null;
+      otherCurrencyOrders: 0;
+      otherCurrencyCount: 0;
+      comparison: null;
+      unlockGuidance: string;
+    };
+
+export type OverviewAovKpi =
+  | {
+      status: "available";
+      value: number;
+      currency: string;
+      basisNote: string;
+      comparison: SalesMoneyComparison | null;
+      unlockGuidance: null;
+    }
+  | {
+      status: "unavailable";
+      value: null;
+      currency: null;
+      basisNote: null;
+      comparison: null;
+      unlockGuidance: string;
+    };
 
 export interface SalesDataQuality {
   purchaseEvents: number;

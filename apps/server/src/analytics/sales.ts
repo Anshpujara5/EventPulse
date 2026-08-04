@@ -182,6 +182,54 @@ export interface SalesTabData {
   dataQuality: SalesDataQuality;
 }
 
+export type OverviewOrdersKpi = SalesOrdersMeasurement & {
+  comparison: SalesOrdersComparison | null;
+};
+
+export type OverviewGmvKpi =
+  | {
+      status: "available";
+      value: number;
+      currency: string;
+      otherCurrencyOrders: number;
+      otherCurrencyCount: number;
+      comparison: SalesMoneyComparison | null;
+      unlockGuidance: null;
+    }
+  | {
+      status: "unavailable";
+      value: null;
+      currency: null;
+      otherCurrencyOrders: 0;
+      otherCurrencyCount: 0;
+      comparison: null;
+      unlockGuidance: string;
+    };
+
+export type OverviewAovKpi =
+  | {
+      status: "available";
+      value: number;
+      currency: string;
+      basisNote: string;
+      comparison: SalesMoneyComparison | null;
+      unlockGuidance: null;
+    }
+  | {
+      status: "unavailable";
+      value: null;
+      currency: null;
+      basisNote: null;
+      comparison: null;
+      unlockGuidance: string;
+    };
+
+export interface OverviewSalesKpis {
+  orders: OverviewOrdersKpi;
+  gmv: OverviewGmvKpi;
+  aov: OverviewAovKpi;
+}
+
 interface HeadlineRow {
   confirmedOrders: bigint;
   purchasingSessions: bigint;
@@ -207,6 +255,17 @@ interface ComparisonRow {
   confirmedOrders: bigint;
   purchasingSessions: bigint;
   purchaseEvents: bigint;
+  currency: string | null;
+  gmv: unknown;
+  moneyBearingOrders: bigint | null;
+}
+
+interface OverviewSalesRow {
+  period: "headline" | "current" | "previous";
+  confirmedOrders: bigint;
+  purchasingSessions: bigint;
+  purchaseEvents: bigint;
+  ownedHasOrderIdentity: boolean;
   currency: string | null;
   gmv: unknown;
   moneyBearingOrders: bigint | null;
@@ -791,9 +850,187 @@ async function fetchSalesComparisonRows(
   `;
 }
 
+async function fetchOverviewSalesRows(
+  scope: AnalyticsScope,
+): Promise<OverviewSalesRow[]> {
+  return prisma.$queryRaw<OverviewSalesRow[]>`
+    WITH scoped_events AS (
+      SELECT
+        id,
+        name,
+        properties,
+        "userId",
+        "projectId",
+        "sessionId",
+        "createdAt",
+        NULLIF(BTRIM(properties->>'order_id'), '') AS order_id,
+        properties->>'amount' AS amount_text,
+        properties->>'currency' AS currency_text
+      FROM "Event"
+      WHERE ${scope.sql.ownedEvent}
+        AND (
+          ${scope.sql.currentEvent}
+          OR ${scope.sql.comparisonPreviousRange}
+        )
+        AND LOWER(name) IN (${allMoneyEvidenceNamesSql()})
+    ),
+    periodized_events AS (
+      SELECT e.*, period_scope.period
+      FROM scoped_events e
+      CROSS JOIN LATERAL (
+        VALUES
+          ('headline', ${scope.sql.currentEvent}),
+          ('current', ${scope.sql.comparisonCurrentRange}),
+          ('previous', ${scope.sql.comparisonPreviousRange})
+      ) AS period_scope(period, included)
+      WHERE period_scope.included
+    ),
+    order_facts AS (
+      SELECT *
+      FROM periodized_events
+      WHERE LOWER(name) IN (${orderFactNamesSql()})
+    ),
+    identity_ranked AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (
+          PARTITION BY period, "projectId", order_id
+          ORDER BY "createdAt" ASC, id ASC
+        ) AS identity_rank
+      FROM order_facts
+      WHERE order_id IS NOT NULL
+    ),
+    identities AS (
+      SELECT * FROM identity_ranked WHERE identity_rank = 1
+    ),
+    session_ranked AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (
+          PARTITION BY period, "projectId", NULLIF(BTRIM("sessionId"), '')
+          ORDER BY "createdAt" ASC, id ASC
+        ) AS session_rank
+      FROM order_facts
+      WHERE NULLIF(BTRIM("sessionId"), '') IS NOT NULL
+    ),
+    sessions AS (
+      SELECT * FROM session_ranked WHERE session_rank = 1
+    ),
+    money_evidence AS (
+      SELECT e.*
+      FROM periodized_events e
+      INNER JOIN identities i
+        ON i.period = e.period
+       AND i."projectId" = e."projectId"
+       AND i.order_id = e.order_id
+      WHERE e.amount_text ~ ${NON_NEGATIVE_MONEY_SQL_PATTERN}
+        AND BTRIM(e.currency_text) ~ ${CURRENCY_SQL_PATTERN}
+    ),
+    money_ranked AS (
+      SELECT
+        *,
+        amount_text::numeric AS amount_value,
+        BTRIM(currency_text) AS normalized_currency,
+        ROW_NUMBER() OVER (
+          PARTITION BY period, "projectId", order_id
+          ORDER BY
+            CASE WHEN LOWER(name) IN (${orderFactNamesSql()}) THEN 0 ELSE 1 END,
+            "createdAt" ASC,
+            id ASC
+        ) AS money_rank
+      FROM money_evidence
+    ),
+    money_representatives AS (
+      SELECT * FROM money_ranked WHERE money_rank = 1
+    ),
+    owned_identity_capability AS (
+      SELECT EXISTS (
+        SELECT 1
+        FROM "Event"
+        WHERE ${scope.sql.ownedEvent}
+          AND LOWER(name) IN (${orderFactNamesSql()})
+          AND NULLIF(BTRIM(properties->>'order_id'), '') IS NOT NULL
+      ) AS has_identity
+    ),
+    aggregate_counts AS (
+      SELECT
+        (SELECT COUNT(*) FILTER (WHERE period = 'headline') FROM identities)
+          AS headline_confirmed_orders,
+        (SELECT COUNT(*) FILTER (WHERE period = 'current') FROM identities)
+          AS current_confirmed_orders,
+        (SELECT COUNT(*) FILTER (WHERE period = 'previous') FROM identities)
+          AS previous_confirmed_orders,
+        (SELECT COUNT(*) FILTER (WHERE period = 'headline') FROM sessions)
+          AS headline_purchasing_sessions,
+        (SELECT COUNT(*) FILTER (WHERE period = 'current') FROM sessions)
+          AS current_purchasing_sessions,
+        (SELECT COUNT(*) FILTER (WHERE period = 'previous') FROM sessions)
+          AS previous_purchasing_sessions,
+        (SELECT COUNT(*) FILTER (WHERE period = 'headline') FROM order_facts)
+          AS headline_purchase_events,
+        (SELECT COUNT(*) FILTER (WHERE period = 'current') FROM order_facts)
+          AS current_purchase_events,
+        (SELECT COUNT(*) FILTER (WHERE period = 'previous') FROM order_facts)
+          AS previous_purchase_events
+    ),
+    period_counts AS (
+      SELECT
+        'headline' AS period,
+        headline_confirmed_orders AS confirmed_orders,
+        headline_purchasing_sessions AS purchasing_sessions,
+        headline_purchase_events AS purchase_events
+      FROM aggregate_counts
+      UNION ALL
+      SELECT
+        'current',
+        current_confirmed_orders,
+        current_purchasing_sessions,
+        current_purchase_events
+      FROM aggregate_counts
+      UNION ALL
+      SELECT
+        'previous',
+        previous_confirmed_orders,
+        previous_purchasing_sessions,
+        previous_purchase_events
+      FROM aggregate_counts
+    ),
+    currency_slices AS (
+      SELECT
+        period,
+        normalized_currency AS currency,
+        SUM(amount_value) AS gmv,
+        COUNT(*) AS money_bearing_orders
+      FROM money_representatives
+      GROUP BY period, normalized_currency
+    )
+    SELECT
+      p.period,
+      p.confirmed_orders AS "confirmedOrders",
+      p.purchasing_sessions AS "purchasingSessions",
+      p.purchase_events AS "purchaseEvents",
+      (SELECT has_identity FROM owned_identity_capability)
+        AS "ownedHasOrderIdentity",
+      c.currency,
+      c.gmv,
+      c.money_bearing_orders AS "moneyBearingOrders"
+    FROM period_counts p
+    LEFT JOIN currency_slices c ON c.period = p.period
+    ORDER BY p.period ASC, c.money_bearing_orders DESC NULLS LAST, c.currency ASC
+  `;
+}
+
 function buildPeriodSnapshot(
-  rows: ComparisonRow[],
-  period: ComparisonRow["period"],
+  rows: Array<{
+    period: string;
+    confirmedOrders: bigint;
+    purchasingSessions: bigint;
+    purchaseEvents: bigint;
+    currency: string | null;
+    gmv: unknown;
+    moneyBearingOrders: bigint | null;
+  }>,
+  period: string,
   ownedHasOrderIdentity: boolean,
 ): SalesPeriodSnapshot {
   const periodRows = rows.filter((row) => row.period === period);
@@ -922,6 +1159,89 @@ function buildSalesComparison(input: {
       ),
       ...comparisonBasis,
     },
+  };
+}
+
+export async function buildOverviewSalesKpis(
+  scope: AnalyticsScope,
+): Promise<OverviewSalesKpis> {
+  const rows = await fetchOverviewSalesRows(scope);
+  const ownedHasOrderIdentity = rows[0]?.ownedHasOrderIdentity === true;
+  const headline = buildPeriodSnapshot(
+    rows,
+    "headline",
+    ownedHasOrderIdentity,
+  );
+  const current = buildPeriodSnapshot(
+    rows,
+    "current",
+    ownedHasOrderIdentity,
+  );
+  const previous = buildPeriodSnapshot(
+    rows,
+    "previous",
+    ownedHasOrderIdentity,
+  );
+  const comparison = buildSalesComparison({
+    current,
+    previous,
+    comparisonLabel: scope.comparison.label,
+  });
+  const money = buildMoneyMeasurement(headline.orders, headline.currencies);
+  const gmvComparison =
+    money.status === "available" &&
+    comparison.gmv?.currency === money.dominantCurrency
+      ? comparison.gmv
+      : null;
+  const aovComparison =
+    money.status === "available" &&
+    comparison.aov?.currency === money.dominantCurrency
+      ? comparison.aov
+      : null;
+
+  return {
+    orders: {
+      ...headline.orders,
+      comparison: comparison.orders,
+    },
+    gmv:
+      money.status === "available"
+        ? {
+            status: "available",
+            value: money.headlineGmv,
+            currency: money.dominantCurrency,
+            otherCurrencyOrders: money.otherCurrencyOrders,
+            otherCurrencyCount: money.otherCurrencyCount,
+            comparison: gmvComparison,
+            unlockGuidance: null,
+          }
+        : {
+            status: "unavailable",
+            value: null,
+            currency: null,
+            otherCurrencyOrders: 0,
+            otherCurrencyCount: 0,
+            comparison: null,
+            unlockGuidance: money.unlockGuidance,
+          },
+    aov:
+      money.status === "available"
+        ? {
+            status: "available",
+            value: money.headlineAov,
+            currency: money.dominantCurrency,
+            basisNote: money.aovBasisNote,
+            comparison: aovComparison,
+            unlockGuidance: null,
+          }
+        : {
+            status: "unavailable",
+            value: null,
+            currency: null,
+            basisNote: null,
+            comparison: null,
+            unlockGuidance: money.unlockGuidance,
+          },
   };
 }
 

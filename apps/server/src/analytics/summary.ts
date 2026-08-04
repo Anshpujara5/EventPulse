@@ -35,7 +35,15 @@ import {
   fetchSessionFunnel,
   type SessionFunnel,
 } from "./sessionFunnel";
-import { buildSalesAnalytics, type SalesTabData } from "./sales";
+import {
+  buildOverviewSalesKpis,
+  buildSalesAnalytics,
+  type OverviewAovKpi,
+  type OverviewGmvKpi,
+  type OverviewOrdersKpi,
+  type OverviewSalesKpis,
+  type SalesTabData,
+} from "./sales";
 import { fetchShopperSummary, type ShopperSummary } from "./shopperSummary";
 import { roundPct } from "./shared/numbers";
 import {
@@ -73,6 +81,9 @@ export interface OverviewTabData {
   insights: AnalyticsInsight[];
   comparison: PeriodComparison;
   health: AnalyticsHealth;
+  orders: OverviewOrdersKpi;
+  gmv: OverviewGmvKpi;
+  aov: OverviewAovKpi;
 }
 
 export interface ConversionTabData {
@@ -104,6 +115,7 @@ function composeOverviewSummary(params: {
   trendGranularity: TrendGranularity | null;
   periodComparison: PeriodComparisonCounts;
   readiness: TrackingReadinessItem[];
+  salesKpis: OverviewSalesKpis;
 }): OverviewTabData {
   const {
     scope,
@@ -112,6 +124,7 @@ function composeOverviewSummary(params: {
     trendGranularity,
     periodComparison,
     readiness,
+    salesKpis,
   } = params;
   const scopedTotal = eventActivity.totalEvents;
 
@@ -165,6 +178,9 @@ function composeOverviewSummary(params: {
     insights,
     comparison,
     health,
+    orders: salesKpis.orders,
+    gmv: salesKpis.gmv,
+    aov: salesKpis.aov,
   };
 }
 
@@ -175,12 +191,13 @@ export async function buildOverviewSummary(
     ? await fetchTrendSpanDays(scope)
     : null;
   const trendGranularity = resolveTrendGranularity(scope, allTimeSpanDays);
-  const [eventActivity, trendPoints, periodComparison, readiness] =
+  const [eventActivity, trendPoints, periodComparison, readiness, salesKpis] =
     await Promise.all([
       fetchEventActivity(scope),
       fetchTrend(scope, trendGranularity),
       fetchPeriodComparison(scope),
       fetchTrackingReadiness(scope),
+      buildOverviewSalesKpis(scope),
     ]);
 
   return composeOverviewSummary({
@@ -190,6 +207,7 @@ export async function buildOverviewSummary(
     trendGranularity,
     periodComparison,
     readiness,
+    salesKpis,
   });
 }
 

@@ -3,10 +3,14 @@ import type {
   AnalyticsInsight,
   AnalyticsSummary,
   EventTrend,
+  OverviewAovKpi,
+  OverviewGmvKpi,
+  OverviewOrdersKpi,
   PeriodComparison,
 } from "../analytics-types";
 import { AnalyticsMetricCards } from "../AnalyticsMetricCards";
 import { EventTrendChart } from "../HourlyTrendChart";
+import { OverviewSalesMetricCards } from "../OverviewSalesMetricCards";
 import { TrackingHealthInsightsCard } from "../TrackingHealthInsightsCard";
 
 export function OverviewTab({
@@ -16,6 +20,9 @@ export function OverviewTab({
   health,
   insights,
   trend,
+  orders,
+  gmv,
+  aov,
 }: {
   summary: AnalyticsSummary;
   scopeLabel: string;
@@ -23,6 +30,9 @@ export function OverviewTab({
   health: AnalyticsHealth;
   insights: AnalyticsInsight[];
   trend: EventTrend;
+  orders: OverviewOrdersKpi;
+  gmv: OverviewGmvKpi;
+  aov: OverviewAovKpi;
 }) {
   return (
     <>
@@ -33,6 +43,8 @@ export function OverviewTab({
         scopeLabel={scopeLabel}
         summary={summary}
       />
+
+      <OverviewSalesMetricCards aov={aov} gmv={gmv} orders={orders} />
 
       <section className="mt-4">
         <TrackingHealthInsightsCard health={health} insights={insights} />

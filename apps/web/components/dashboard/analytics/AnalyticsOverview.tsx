@@ -11,6 +11,7 @@ import { useAnalyticsTabData } from "@/hooks/useAnalyticsTabData";
 import { validateAnalyticsDateRange } from "@/lib/analyticsDateRange";
 import { AnalyticsEmptyState } from "./AnalyticsEmptyState";
 import { AnalyticsRefreshBar } from "./AnalyticsRefreshBar";
+import { OverviewSalesMetricCards } from "./OverviewSalesMetricCards";
 import { AnalyticsTabPanel } from "./AnalyticsTabPanel";
 import { TrackingHealthInsightsCard } from "./TrackingHealthInsightsCard";
 import {
@@ -157,6 +158,11 @@ function AnalyticsScopedOverview({
                     data.summary.totalEvents === 0 ? (
                       <>
                         <AnalyticsEmptyState />
+                        <OverviewSalesMetricCards
+                          aov={data.aov}
+                          gmv={data.gmv}
+                          orders={data.orders}
+                        />
                         <section className="mt-4">
                           <TrackingHealthInsightsCard
                             health={data.health}
@@ -172,6 +178,9 @@ function AnalyticsScopedOverview({
                         scopeLabel={scopeLabel}
                         summary={data.summary}
                         trend={data.trend}
+                        orders={data.orders}
+                        gmv={data.gmv}
+                        aov={data.aov}
                       />
                     )
                   }
