@@ -398,6 +398,7 @@ export interface SalesTabData {
 export interface AnalyticsTabDataMap {
   overview: OverviewTabData;
   conversion: ConversionTabData;
+  sales: SalesTabData;
   products: ProductsTabData;
   shoppers: ShoppersTabData;
   behavior: BehaviorTabData;

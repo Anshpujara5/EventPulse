@@ -34,10 +34,6 @@ interface AnalyticsResponse<T> {
   data: T;
 }
 
-function isDataTab(tab: AnalyticsTabId): tab is AnalyticsDataTabId {
-  return tab !== "sales";
-}
-
 async function requestAnalyticsTab<T extends AnalyticsDataTabId>(
   tab: T,
   scopeQuery: string,
@@ -67,18 +63,19 @@ export function useAnalyticsTabData({
   const latestRequestIds = useRef<Record<AnalyticsDataTabId, number>>({
     overview: 0,
     conversion: 0,
+    sales: 0,
     products: 0,
     shoppers: 0,
     behavior: 0,
   });
 
   const activeState =
-    isDataTab(activeTab) && cache.scopeKey === scopeKey
+    cache.scopeKey === scopeKey
       ? cache.tabs[activeTab]
       : undefined;
 
   useEffect(() => {
-    if (!isDataTab(activeTab) || scopeQuery === null) {
+    if (scopeQuery === null) {
       return;
     }
 
@@ -134,7 +131,7 @@ export function useAnalyticsTabData({
   }, [activeTab, cache, scopeKey, scopeQuery]);
 
   const refreshActiveTab = useCallback(() => {
-    if (!isDataTab(activeTab) || scopeQuery === null) {
+    if (scopeQuery === null) {
       return;
     }
 
@@ -168,7 +165,6 @@ export function useAnalyticsTabData({
   return {
     activeLoading:
       scopeQuery !== null &&
-      isDataTab(activeTab) &&
       (!activeState || activeState.status === "loading"),
     getTabState,
     refreshActiveTab,

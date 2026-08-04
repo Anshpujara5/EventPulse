@@ -191,7 +191,15 @@ function AnalyticsScopedOverview({
                   )}
                 </AnalyticsTabPanel>
               ),
-              sales: <SalesTab />,
+              sales: (
+                <AnalyticsTabPanel
+                  label="sales analytics"
+                  onRetry={refreshActiveTab}
+                  state={getTabState("sales")}
+                >
+                  {(data) => <SalesTab data={data} />}
+                </AnalyticsTabPanel>
+              ),
               products: (
                 <AnalyticsTabPanel
                   label="product analytics"
