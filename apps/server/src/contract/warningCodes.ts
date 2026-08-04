@@ -6,6 +6,9 @@ export const CONTRACT_WARNING_CODES = {
   CONTRACT_MISSING_ORDER_ID: "contract.missing_order_id",
   CONTRACT_MISSING_PRODUCT_ID: "contract.missing_product_id",
   CONTRACT_MISSING_CURRENCY: "contract.missing_currency",
+  CONTRACT_MISSING_PAYMENT_ATTEMPT_ID:
+    "contract.missing_payment_attempt_id",
+  CONTRACT_MISSING_COUPON_CODE: "contract.missing_coupon_code",
   CONTRACT_DEPRECATED_FIELD: "contract.deprecated_field",
   CONTRACT_ALIAS_EVENT_NAME: "contract.alias_event_name",
   VALUE_UNPARSEABLE_MONEY: "value.unparseable_money",
