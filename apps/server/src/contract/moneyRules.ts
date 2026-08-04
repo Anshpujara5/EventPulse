@@ -6,6 +6,12 @@
 export const MONEY_REPRESENTATION = "decimal-major-units";
 export const MAX_MONEY_DECIMAL_PLACES = 2;
 
+/** SQL-safe text patterns for guarded JSONB money casts. */
+export const NON_NEGATIVE_MONEY_SQL_PATTERN =
+  "^[0-9]+([.][0-9]{1,2})?$";
+export const NEGATIVE_MONEY_SQL_PATTERN =
+  "^-[0-9]+([.][0-9]{1,2})?$";
+
 export const MONEY_PROPERTY_NAMES = [
   "amount",
   "price",

@@ -264,6 +264,137 @@ export interface BehaviorTabData {
   topProperties: TopProperty[];
 }
 
+export type SalesOrderCountBasis =
+  | "distinct-order-id"
+  | "purchasing-session-estimate";
+
+export type SalesOrdersMeasurement =
+  | {
+      status: "confirmed";
+      basis: "distinct-order-id";
+      value: number;
+      label: "Confirmed orders";
+      isEstimated: false;
+      unlockGuidance: null;
+    }
+  | {
+      status: "estimated";
+      basis: "purchasing-session-estimate";
+      value: number;
+      label: "Estimated from purchasing sessions";
+      isEstimated: true;
+      unlockGuidance: string;
+    }
+  | {
+      status: "unavailable";
+      basis: null;
+      value: null;
+      label: "Orders unavailable";
+      isEstimated: false;
+      unlockGuidance: string;
+    };
+
+export interface SalesCurrencySlice {
+  currency: string;
+  gmv: number;
+  moneyBearingOrders: number;
+  aov: number;
+  orderSharePercent: number;
+}
+
+export type SalesMoneyMeasurement =
+  | {
+      status: "available";
+      dominantCurrency: string;
+      headlineGmv: number;
+      headlineAov: number;
+      aovBasisNote: string;
+      currencies: SalesCurrencySlice[];
+      otherCurrencyOrders: number;
+      otherCurrencyCount: number;
+      unlockGuidance: null;
+    }
+  | {
+      status: "unavailable";
+      dominantCurrency: null;
+      headlineGmv: null;
+      headlineAov: null;
+      aovBasisNote: null;
+      currencies: [];
+      otherCurrencyOrders: 0;
+      otherCurrencyCount: 0;
+      unlockGuidance: string;
+    };
+
+export interface SalesTrendPoint {
+  date: string;
+  orders: number;
+  gmv: number | null;
+}
+
+export interface SalesTrend {
+  granularity: TrendGranularity;
+  orderBasis: SalesOrderCountBasis;
+  gmvCurrency: string | null;
+  points: SalesTrendPoint[];
+}
+
+export interface SalesMetricComparison {
+  current: number;
+  previous: number | null;
+  changePercent: number | null;
+  direction: ComparisonDirection;
+  label: string;
+}
+
+export interface SalesOrdersComparison extends SalesMetricComparison {
+  basis: SalesOrderCountBasis;
+}
+
+export interface SalesMoneyComparison extends SalesMetricComparison {
+  currency: string;
+  currentMoneyBearingOrders: number;
+  previousMoneyBearingOrders: number;
+}
+
+export interface SalesDataQuality {
+  purchaseEvents: number;
+  purchaseEventsWithOrderId: number;
+  purchaseEventsWithOrderIdPercent: number | null;
+  paymentOnlyOrderIds: number;
+  missingOrderIdPurchaseEvents: number;
+  ordersWithoutMoney: number;
+  missingAmountOrders: number;
+  invalidAmountOrders: number;
+  negativeAmountOrders: number;
+  missingCurrencyOrders: number;
+  invalidCurrencyOrders: number;
+  conflictingMoneyEvidence: number;
+}
+
+export interface SalesInsight {
+  id: "gmv-change";
+  severity: "info" | "warning";
+  title: string;
+  description: string;
+  changePercent: number;
+  currency: string;
+}
+
+// MIRROR: apps/server/src/analytics/sales.ts
+export interface SalesTabData {
+  orders: SalesOrdersMeasurement;
+  money: SalesMoneyMeasurement;
+  trend: SalesTrend | null;
+  comparison: {
+    orders: SalesOrdersComparison | null;
+    gmv: SalesMoneyComparison | null;
+    aov: SalesMoneyComparison | null;
+  };
+  insights: SalesInsight[];
+  dataQuality: SalesDataQuality;
+}
+
 export interface AnalyticsTabDataMap {
   overview: OverviewTabData;
   conversion: ConversionTabData;

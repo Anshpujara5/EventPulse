@@ -35,6 +35,7 @@ import {
   fetchSessionFunnel,
   type SessionFunnel,
 } from "./sessionFunnel";
+import { buildSalesAnalytics, type SalesTabData } from "./sales";
 import { fetchShopperSummary, type ShopperSummary } from "./shopperSummary";
 import { roundPct } from "./shared/numbers";
 import {
@@ -54,6 +55,7 @@ export type AnalyticsTab =
   | "overview"
   | "conversion"
   | "products"
+  | "sales"
   | "shoppers"
   | "behavior";
 
@@ -92,6 +94,8 @@ export interface BehaviorTabData {
   recentActivity: RecentEvent[];
   topProperties: TopProperty[];
 }
+
+export type { SalesTabData } from "./sales";
 
 function composeOverviewSummary(params: {
   scope: AnalyticsScope;
@@ -217,6 +221,12 @@ export async function buildProductsSummary(
       categoryRows,
     }),
   };
+}
+
+export async function buildSalesSummary(
+  scope: AnalyticsScope,
+): Promise<SalesTabData> {
+  return buildSalesAnalytics(scope);
 }
 
 export async function buildShoppersSummary(

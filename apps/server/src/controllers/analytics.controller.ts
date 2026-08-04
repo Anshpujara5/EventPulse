@@ -8,6 +8,7 @@ import {
   buildConversionSummary,
   buildOverviewSummary,
   buildProductsSummary,
+  buildSalesSummary,
   buildShoppersSummary,
   type AnalyticsTab,
 } from "../analytics/summary";
@@ -22,6 +23,7 @@ function isAnalyticsTab(value: unknown): value is AnalyticsTab {
     value === "overview" ||
     value === "conversion" ||
     value === "products" ||
+    value === "sales" ||
     value === "shoppers" ||
     value === "behavior"
   );
@@ -35,6 +37,8 @@ function buildTabSummary(tab: AnalyticsTab, scope: AnalyticsScope) {
       return buildConversionSummary(scope);
     case "products":
       return buildProductsSummary(scope);
+    case "sales":
+      return buildSalesSummary(scope);
     case "shoppers":
       return buildShoppersSummary(scope);
     case "behavior":
