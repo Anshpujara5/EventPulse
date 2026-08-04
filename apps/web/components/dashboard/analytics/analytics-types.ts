@@ -158,6 +158,49 @@ export interface ShopperSummary {
   purchasingSessions: number;
 }
 
+// MIRROR: apps/server/src/analytics/lineItems.ts
+export interface ItemsCoverage {
+  status: "complete" | "partial" | "unavailable";
+  eligibleConfirmedOrders: number;
+  ordersWithUsableItems: number;
+  percentage: number | null;
+  skippedLines: {
+    malformed: number;
+    missingProductId: number;
+    invalidQuantity: number;
+    invalidPrice: number;
+    missingCategory: number;
+    invalidCurrency: number;
+  };
+  unlockGuidance: string | null;
+}
+
+export interface LineRevenueCurrencySlice {
+  currency: string;
+  value: number;
+  confirmedOrders: number;
+}
+
+export type LineRevenueMeasurement =
+  | {
+      status: "available";
+      value: number;
+      currency: string;
+      currencies: LineRevenueCurrencySlice[];
+      otherCurrencyOrders: number;
+      otherCurrencyCount: number;
+      unlockGuidance: null;
+    }
+  | {
+      status: "unavailable";
+      value: null;
+      currency: null;
+      currencies: [];
+      otherCurrencyOrders: 0;
+      otherCurrencyCount: 0;
+      unlockGuidance: string;
+    };
+
 export interface ProductStat {
   projectId: string;
   projectName: string;
@@ -171,6 +214,9 @@ export interface ProductStat {
   unitsAddedToCart: number;
   gmv: number | null;
   currency: string | null;
+  lineRevenue: LineRevenueMeasurement;
+  confirmedUnitsSold: number | null;
+  itemsCoverage: ItemsCoverage;
 }
 
 export interface CategoryStat {
@@ -185,6 +231,9 @@ export interface CategoryStat {
   unitsAddedToCart: number;
   gmv: number | null;
   currency: string | null;
+  lineRevenue: LineRevenueMeasurement;
+  confirmedUnitsSold: number | null;
+  itemsCoverage: ItemsCoverage;
 }
 
 export interface ProductPerformance {

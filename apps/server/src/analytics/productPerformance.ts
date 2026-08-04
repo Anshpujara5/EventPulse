@@ -3,6 +3,11 @@ import type { AnalyticsScope } from "./analyticsScope";
 import { SESSION_FUNNEL_STEPS } from "./shared/aliases";
 import { percentOrNull, toCount } from "./shared/numbers";
 import { prisma } from "../config/prisma";
+import type {
+  ItemsCoverage,
+  LineItemAttributionResult,
+  LineRevenueMeasurement,
+} from "./lineItems";
 
 interface ProductPerformanceRow {
   projectId: string;
@@ -268,6 +273,9 @@ export interface ProductStat {
   unitsAddedToCart: number;
   gmv: number | null;
   currency: string | null;
+  lineRevenue: LineRevenueMeasurement;
+  confirmedUnitsSold: number | null;
+  itemsCoverage: ItemsCoverage;
 }
 
 export interface CategoryStat {
@@ -282,6 +290,9 @@ export interface CategoryStat {
   unitsAddedToCart: number;
   gmv: number | null;
   currency: string | null;
+  lineRevenue: LineRevenueMeasurement;
+  confirmedUnitsSold: number | null;
+  itemsCoverage: ItemsCoverage;
 }
 
 export interface ProductPerformance {
@@ -295,12 +306,52 @@ export interface ProductPerformance {
 export function buildProductPerformance(params: {
   productRows: ProductPerformanceRow[];
   categoryRows: CategoryPerformanceRow[];
+  productLineItems: LineItemAttributionResult;
+  categoryLineItems: LineItemAttributionResult;
 }): ProductPerformance {
+  const productLineItems = new Map(
+    params.productLineItems.metrics.map((metric) => [
+      `${metric.projectId}:${metric.dimensionId}`,
+      metric,
+    ]),
+  );
+  const categoryLineItems = new Map(
+    params.categoryLineItems.metrics.map((metric) => [
+      `${metric.projectId}:${metric.dimensionId}`,
+      metric,
+    ]),
+  );
+
+  function missingLineRevenue(
+    coverage: ItemsCoverage,
+    dimensionLabel: "product" | "category",
+  ): LineRevenueMeasurement {
+    const coverageGuidance = coverage.unlockGuidance;
+
+    return {
+      status: "unavailable",
+      value: null,
+      currency: null,
+      currencies: [],
+      otherCurrencyOrders: 0,
+      otherCurrencyCount: 0,
+      unlockGuidance:
+        coverage.status === "complete"
+          ? `No confirmed line-item purchases for this ${dimensionLabel} in the selected range.`
+          : coverageGuidance ??
+            `Add usable items[] to confirmed purchase events to unlock ${dimensionLabel} line revenue.`,
+    };
+  }
+
   const products: ProductStat[] = params.productRows.map((row) => {
     const viewSessions = toCount(row.viewSessions);
     const cartSessions = toCount(row.cartSessions);
     const viewPurchaseSessions = toCount(row.viewPurchaseSessions);
     const cartPurchaseSessions = toCount(row.cartPurchaseSessions);
+    const lineItems = productLineItems.get(
+      `${row.projectId}:${row.productId}`,
+    );
+    const itemsCoverage = params.productLineItems.itemsCoverage;
 
     return {
       projectId: row.projectId,
@@ -321,6 +372,12 @@ export function buildProductPerformance(params: {
       unitsAddedToCart: Number(row.unitsAddedToCart ?? 0),
       gmv: row.gmv === null ? null : Number(row.gmv),
       currency: row.currency,
+      lineRevenue:
+        lineItems?.lineRevenue ?? missingLineRevenue(itemsCoverage, "product"),
+      confirmedUnitsSold:
+        lineItems?.confirmedUnitsSold ??
+        (itemsCoverage.status === "complete" ? 0 : null),
+      itemsCoverage,
     };
   });
 
@@ -329,6 +386,10 @@ export function buildProductPerformance(params: {
     const cartSessions = toCount(row.cartSessions);
     const viewPurchaseSessions = toCount(row.viewPurchaseSessions);
     const cartPurchaseSessions = toCount(row.cartPurchaseSessions);
+    const lineItems = categoryLineItems.get(
+      `${row.projectId}:${row.category}`,
+    );
+    const itemsCoverage = params.categoryLineItems.itemsCoverage;
 
     return {
       projectId: row.projectId,
@@ -348,6 +409,12 @@ export function buildProductPerformance(params: {
       unitsAddedToCart: Number(row.unitsAddedToCart ?? 0),
       gmv: row.gmv === null ? null : Number(row.gmv),
       currency: row.currency,
+      lineRevenue:
+        lineItems?.lineRevenue ?? missingLineRevenue(itemsCoverage, "category"),
+      confirmedUnitsSold:
+        lineItems?.confirmedUnitsSold ??
+        (itemsCoverage.status === "complete" ? 0 : null),
+      itemsCoverage,
     };
   });
 
@@ -375,4 +442,3 @@ export function buildProductPerformance(params: {
     categories,
   };
 }
-

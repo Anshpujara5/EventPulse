@@ -1,6 +1,10 @@
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
 import type { CategoryStat } from "./analytics-types";
+import {
+  ItemsCoverageNotice,
+  LineRevenueValue,
+} from "./LineItemAttribution";
 
 function formatPercent(value: number | null): string {
   if (value === null) {
@@ -32,9 +36,7 @@ export function CategoryPerformanceCard({
     ),
     1,
   );
-  const hasGmv = categories.some(
-    (category) => category.gmv !== null && category.currency !== null,
-  );
+  const itemsCoverage = categories[0]?.itemsCoverage;
 
   return (
     <GlowCard className="p-5">
@@ -61,11 +63,11 @@ export function CategoryPerformanceCard({
         </div>
       ) : (
         <>
-          {!hasGmv && (
-            <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-100/90">
-              GMV unavailable. Send category and product-attributed purchase
-              price, quantity, and currency to unlock this metric.
-            </div>
+          {itemsCoverage && (
+            <ItemsCoverageNotice
+              coverage={itemsCoverage}
+              includeCategory
+            />
           )}
 
           <div className="mt-4 divide-y divide-slate-800/80">
@@ -145,12 +147,32 @@ export function CategoryPerformanceCard({
                     </p>
                   </div>
                   <div>
-                    <span className="text-slate-500">GMV</span>
+                    <span className="text-slate-500">Order GMV</span>
                     <p className="font-black text-white">
                       {category.gmv !== null && category.currency !== null
                         ? formatMoney(category.gmv, category.currency)
-                        : "Unavailable"}
+                        : "Not attributed"}
                     </p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 rounded-lg border border-slate-800/80 bg-slate-950/35 px-3 py-2 text-xs sm:grid-cols-2">
+                  <div className="flex justify-between gap-3 sm:block">
+                    <span className="text-slate-500">
+                      Confirmed units sold
+                    </span>
+                    <p className="font-black text-white">
+                      {category.confirmedUnitsSold === null
+                        ? "Unavailable"
+                        : category.confirmedUnitsSold.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex min-w-0 justify-between gap-3 sm:block">
+                    <span className="text-slate-500">
+                      Category line revenue
+                    </span>
+                    <div className="font-black text-white">
+                      <LineRevenueValue lineRevenue={category.lineRevenue} />
+                    </div>
                   </div>
                 </div>
               </div>

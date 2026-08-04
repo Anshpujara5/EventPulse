@@ -25,6 +25,10 @@ import {
   type AnalyticsInsight,
 } from "./healthInsights";
 import {
+  fetchCategoryLineItemAttribution,
+  fetchProductLineItemAttribution,
+} from "./lineItems";
+import {
   buildProductPerformance,
   fetchCategoryPerformanceRows,
   fetchProductPerformanceRows,
@@ -228,15 +232,24 @@ export async function buildConversionSummary(
 export async function buildProductsSummary(
   scope: AnalyticsScope,
 ): Promise<ProductsTabData> {
-  const [productRows, categoryRows] = await Promise.all([
+  const [
+    productRows,
+    categoryRows,
+    productLineItems,
+    categoryLineItems,
+  ] = await Promise.all([
     fetchProductPerformanceRows(scope),
     fetchCategoryPerformanceRows(scope),
+    fetchProductLineItemAttribution(scope),
+    fetchCategoryLineItemAttribution(scope),
   ]);
 
   return {
     productPerformance: buildProductPerformance({
       productRows,
       categoryRows,
+      productLineItems,
+      categoryLineItems,
     }),
   };
 }

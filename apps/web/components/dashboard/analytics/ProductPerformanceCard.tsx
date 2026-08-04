@@ -4,6 +4,10 @@ import { useMemo, useState } from "react";
 import { GlowCard } from "@/components/common/GlowCard";
 import { Icon } from "@/components/common/Icon";
 import type { ProductPerformance, ProductStat } from "./analytics-types";
+import {
+  ItemsCoverageNotice,
+  LineRevenueValue,
+} from "./LineItemAttribution";
 
 type SortMode = "views" | "cart" | "conversion" | "units";
 
@@ -91,9 +95,7 @@ export function ProductPerformanceCard({
     ...sortedProducts.map((product) => metricValue(product, sortMode)),
     1,
   );
-  const hasGmv = performance.products.some(
-    (product) => product.gmv !== null && product.currency !== null,
-  );
+  const itemsCoverage = performance.products[0]?.itemsCoverage;
 
   return (
     <GlowCard className="p-5">
@@ -150,12 +152,7 @@ export function ProductPerformanceCard({
             />
           </div>
 
-          {!hasGmv && (
-            <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-100/90">
-              GMV unavailable. Send product-attributed purchase price, quantity,
-              and currency to unlock this metric.
-            </div>
-          )}
+          {itemsCoverage && <ItemsCoverageNotice coverage={itemsCoverage} />}
 
           <div className="mt-4 divide-y divide-slate-800/80">
             {sortedProducts.map((product) => {
@@ -220,12 +217,32 @@ export function ProductPerformanceCard({
                       </p>
                     </div>
                     <div className="flex justify-between gap-2 text-xs lg:block">
-                      <span className="text-slate-500">GMV</span>
+                      <span className="text-slate-500">Order GMV</span>
                       <p className="font-black text-white">
                         {product.gmv !== null && product.currency !== null
                           ? formatMoney(product.gmv, product.currency)
-                          : "Unavailable"}
+                          : "Not attributed"}
                       </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2 rounded-lg border border-slate-800/80 bg-slate-950/35 px-3 py-2 text-xs sm:grid-cols-2">
+                    <div className="flex justify-between gap-3 sm:block">
+                      <span className="text-slate-500">
+                        Confirmed units sold
+                      </span>
+                      <p className="font-black text-white">
+                        {product.confirmedUnitsSold === null
+                          ? "Unavailable"
+                          : product.confirmedUnitsSold.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex min-w-0 justify-between gap-3 sm:block">
+                      <span className="text-slate-500">
+                        Product line revenue
+                      </span>
+                      <div className="font-black text-white">
+                        <LineRevenueValue lineRevenue={product.lineRevenue} />
+                      </div>
                     </div>
                   </div>
                 </div>
