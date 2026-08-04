@@ -12,6 +12,7 @@ import { validateAnalyticsDateRange } from "@/lib/analyticsDateRange";
 import { AnalyticsEmptyState } from "./AnalyticsEmptyState";
 import { AnalyticsRefreshBar } from "./AnalyticsRefreshBar";
 import { AnalyticsTabPanel } from "./AnalyticsTabPanel";
+import { TrackingHealthInsightsCard } from "./TrackingHealthInsightsCard";
 import {
   AnalyticsTabs,
   AnalyticsTabsFallback,
@@ -154,7 +155,15 @@ function AnalyticsScopedOverview({
                 >
                   {(data) =>
                     data.summary.totalEvents === 0 ? (
-                      <AnalyticsEmptyState />
+                      <>
+                        <AnalyticsEmptyState />
+                        <section className="mt-4">
+                          <TrackingHealthInsightsCard
+                            health={data.health}
+                            insights={data.insights}
+                          />
+                        </section>
+                      </>
                     ) : (
                       <OverviewTab
                         comparison={data.comparison}

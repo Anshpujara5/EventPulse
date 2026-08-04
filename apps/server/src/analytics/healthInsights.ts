@@ -3,6 +3,7 @@ import type {
   PeriodComparisonCounts,
 } from "./comparison";
 import type { ProjectEventCount, TopEvent } from "./eventActivity";
+import type { TrackingReadinessItem } from "./trackingReadiness";
 import type { TrendPoint } from "./trend";
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,7 @@ export interface AnalyticsHealth {
   score: number;
   status: HealthStatus;
   reasons: string[];
+  readiness: TrackingReadinessItem[];
 }
 
 const HEALTH_DOMINANCE_THRESHOLD_PCT = 70;
@@ -68,6 +70,7 @@ export function buildHealth(params: {
   comparisonDirection: ComparisonDirection;
   comparisonChangePercent: number | null;
   hasCriticalSpike: boolean;
+  readiness: TrackingReadinessItem[];
 }): AnalyticsHealth {
   const {
     scopedTotal,
@@ -80,6 +83,7 @@ export function buildHealth(params: {
     comparisonDirection,
     comparisonChangePercent,
     hasCriticalSpike,
+    readiness,
   } = params;
 
   if (scopedTotal === 0) {
@@ -87,6 +91,7 @@ export function buildHealth(params: {
       score: 0,
       status: "inactive",
       reasons: ["No events received in this scope."],
+      readiness,
     };
   }
 
@@ -132,7 +137,7 @@ export function buildHealth(params: {
   else if (score >= 50) status = "watch";
   else status = "risk";
 
-  return { score, status, reasons };
+  return { score, status, reasons, readiness };
 }
 
 export function buildInsights(params: {

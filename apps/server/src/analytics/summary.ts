@@ -38,6 +38,10 @@ import {
 import { fetchShopperSummary, type ShopperSummary } from "./shopperSummary";
 import { roundPct } from "./shared/numbers";
 import {
+  fetchTrackingReadiness,
+  type TrackingReadinessItem,
+} from "./trackingReadiness";
+import {
   fetchTrend,
   fetchTrendSpanDays,
   resolveTrendGranularity,
@@ -95,6 +99,7 @@ function composeOverviewSummary(params: {
   trendPoints: TrendPoint[];
   trendGranularity: TrendGranularity | null;
   periodComparison: PeriodComparisonCounts;
+  readiness: TrackingReadinessItem[];
 }): OverviewTabData {
   const {
     scope,
@@ -102,6 +107,7 @@ function composeOverviewSummary(params: {
     trendPoints,
     trendGranularity,
     periodComparison,
+    readiness,
   } = params;
   const scopedTotal = eventActivity.totalEvents;
 
@@ -137,6 +143,7 @@ function composeOverviewSummary(params: {
       (insight) =>
         insight.type === "spike" && insight.severity === "critical",
     ),
+    readiness,
   });
 
   return {
@@ -164,11 +171,13 @@ export async function buildOverviewSummary(
     ? await fetchTrendSpanDays(scope)
     : null;
   const trendGranularity = resolveTrendGranularity(scope, allTimeSpanDays);
-  const [eventActivity, trendPoints, periodComparison] = await Promise.all([
-    fetchEventActivity(scope),
-    fetchTrend(scope, trendGranularity),
-    fetchPeriodComparison(scope),
-  ]);
+  const [eventActivity, trendPoints, periodComparison, readiness] =
+    await Promise.all([
+      fetchEventActivity(scope),
+      fetchTrend(scope, trendGranularity),
+      fetchPeriodComparison(scope),
+      fetchTrackingReadiness(scope),
+    ]);
 
   return composeOverviewSummary({
     scope,
@@ -176,6 +185,7 @@ export async function buildOverviewSummary(
     trendPoints,
     trendGranularity,
     periodComparison,
+    readiness,
   });
 }
 

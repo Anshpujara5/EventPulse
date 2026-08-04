@@ -133,6 +133,50 @@ export function TrackingHealthInsightsCard({
             ))}
           </ul>
         )}
+
+        <div className="mt-4 border-t border-slate-800/60 pt-4">
+          <div>
+            <h3 className="text-sm font-black text-white">
+              Tracking Readiness
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Capabilities detected from events in the selected scope.
+            </p>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {health.readiness.map((item) => {
+              const ready = item.status === "ready";
+
+              return (
+                <div
+                  className="min-w-0 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5"
+                  key={item.id}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="min-w-0 text-xs font-bold text-slate-200">
+                      {item.label}
+                    </p>
+                    <span
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                        ready
+                          ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-300"
+                          : "border-slate-700 bg-slate-800/60 text-slate-400"
+                      }`}
+                    >
+                      {ready ? "Ready" : "Locked"}
+                    </span>
+                  </div>
+                  {!ready && item.unlockGuidance && (
+                    <p className="mt-1.5 break-words text-[11px] leading-4 text-slate-500">
+                      {item.unlockGuidance}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Area 2 — Automated Commerce Insights (secondary) */}

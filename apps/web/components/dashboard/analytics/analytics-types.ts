@@ -76,10 +76,32 @@ export interface PeriodComparison {
 
 export type HealthStatus = "healthy" | "watch" | "risk" | "inactive";
 
+export type TrackingReadinessId =
+  | "funnel"
+  | "sessions"
+  | "products"
+  | "orders"
+  | "gmvAov"
+  | "productRevenue"
+  | "payments"
+  | "refunds";
+
+export type TrackingReadinessStatus = "ready" | "locked";
+
+// MIRROR: apps/server/src/analytics/trackingReadiness.ts
+export interface TrackingReadinessItem {
+  id: TrackingReadinessId;
+  rung: number;
+  status: TrackingReadinessStatus;
+  label: string;
+  unlockGuidance: string | null;
+}
+
 export interface AnalyticsHealth {
   score: number;
   status: HealthStatus;
   reasons: string[];
+  readiness: TrackingReadinessItem[];
 }
 
 export type CommerceFunnelStepId =
