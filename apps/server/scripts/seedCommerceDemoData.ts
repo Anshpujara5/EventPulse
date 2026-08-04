@@ -11,8 +11,10 @@ const EVENT_NAMES = [
   "add_to_cart",
   "checkout_started",
   "purchase_completed",
+  "payment_attempted",
   "payment_completed",
   "payment_failed",
+  "refund_issued",
   "item_out_of_stock",
   "item_unavailable",
   "delivery_fee_shown",
@@ -79,13 +81,20 @@ type JourneyContext = {
   deliveryFee: number;
   etaMinutes: number;
   orderId: string;
+  paymentAttemptId: string;
   paymentMethod: string;
+  includePurchaseItems: boolean;
 };
 
 type SessionStats = {
   purchaseSessions: number;
   abandonedCartSessions: number;
   checkoutAbandonedSessions: number;
+};
+
+type ContractCoverageStats = {
+  purchasesWithItems: number;
+  purchasesWithoutItems: number;
 };
 
 const DEMO_PROJECTS: ProjectSeed[] = [
@@ -393,7 +402,12 @@ function createdAtForSession(projectName: string, journey: EventName[]): Date {
   return new Date(now - 30 * 60 * 1000 - rng() * 30 * oneDay);
 }
 
-function createJourneyContext(project: ProjectSeed, customerId: string, sessionId: string): JourneyContext {
+function createJourneyContext(
+  project: ProjectSeed,
+  customerId: string,
+  sessionId: string,
+  includePurchaseItems: boolean,
+): JourneyContext {
   const product = pick(project.products);
   const cartSize = Math.max(1, Math.floor(rng() * 7) + 1);
   const cartValue = money(product.price * cartSize + rng() * 35);
@@ -409,7 +423,9 @@ function createJourneyContext(project: ProjectSeed, customerId: string, sessionI
     deliveryFee,
     etaMinutes,
     orderId: `ord_${Math.floor(rng() * 1_000_000).toString(16)}`,
+    paymentAttemptId: `pay_${sessionId}`,
     paymentMethod: pick(project.paymentMethods),
+    includePurchaseItems,
   };
 }
 
@@ -444,6 +460,34 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
         eta_minutes: context.etaMinutes,
       };
     case "purchase_completed":
+      return {
+        order_id: context.orderId,
+        amount: context.cartValue,
+        currency: project.currency,
+        cart_size: context.cartSize,
+        payment_method: context.paymentMethod,
+        ...(context.includePurchaseItems
+          ? {
+              items: [
+                {
+                  product_id: context.product.id,
+                  product_name: context.product.name,
+                  category: context.product.category,
+                  price: context.product.price,
+                  quantity: context.cartSize,
+                },
+              ],
+            }
+          : {}),
+      };
+    case "payment_attempted":
+      return {
+        payment_attempt_id: context.paymentAttemptId,
+        payment_method: context.paymentMethod,
+        order_id: context.orderId,
+        amount: context.cartValue,
+        currency: project.currency,
+      };
     case "payment_completed":
       return {
         order_id: context.orderId,
@@ -451,12 +495,23 @@ function eventProperties(project: ProjectSeed, eventName: EventName, context: Jo
         currency: project.currency,
         cart_size: context.cartSize,
         payment_method: context.paymentMethod,
+        payment_attempt_id: context.paymentAttemptId,
       };
     case "payment_failed":
       return {
+        payment_attempt_id: context.paymentAttemptId,
         amount: context.cartValue,
+        currency: project.currency,
+        order_id: context.orderId,
         payment_method: context.paymentMethod,
         reason: pick(["card_declined", "insufficient_funds", "gateway_timeout", "wallet_auth_failed"]),
+      };
+    case "refund_issued":
+      return {
+        order_id: context.orderId,
+        amount: context.cartValue,
+        currency: project.currency,
+        reason: "customer_request",
       };
     case "item_out_of_stock":
       return {
@@ -537,7 +592,16 @@ function buildEvents(params: {
       const sessionId = formatSequenceId(params.project.sessionPrefix, sessionCounter, 6);
       const journeyType = pickJourneyType(params.project.journeyWeights);
       const journey = buildJourney(params.project, journeyType);
-      const context = createJourneyContext(params.project, customerId, sessionId);
+      const purchaseOrdinal =
+        journeyType === "successful_purchase"
+          ? sessionStats.purchaseSessions + 1
+          : null;
+      const context = createJourneyContext(
+        params.project,
+        customerId,
+        sessionId,
+        purchaseOrdinal === null || purchaseOrdinal % 5 !== 0,
+      );
       const sessionStartedAt = createdAtForSession(params.project.name, journey);
 
       if (journeyType === "successful_purchase") {
@@ -552,19 +616,63 @@ function buildEvents(params: {
         sessionStats.checkoutAbandonedSessions += 1;
       }
 
+      const journeyEvents: SeededEvent[] = [];
+
       for (const [eventIndex, eventName] of journey.entries()) {
-        counts[eventName] += 1;
-        events.push({
+        const properties = eventProperties(params.project, eventName, context);
+        const createdAt = new Date(
+          sessionStartedAt.getTime() +
+            eventIndex * Math.floor(30_000 + rng() * 150_000),
+        );
+        const event: SeededEvent = {
           name: eventName,
-          properties: eventProperties(params.project, eventName, context),
+          properties,
           userId: params.userId,
           projectId: params.projectId,
           apiKeyId: params.apiKeyId,
           customerId,
           sessionId,
-          createdAt: new Date(
-            sessionStartedAt.getTime() + eventIndex * Math.floor(30_000 + rng() * 150_000),
-          ),
+          createdAt,
+        };
+
+        counts[eventName] += 1;
+        events.push(event);
+        journeyEvents.push(event);
+
+        if (eventName === "payment_completed" || eventName === "payment_failed") {
+          counts.payment_attempted += 1;
+          events.push({
+            name: "payment_attempted",
+            properties: eventProperties(
+              params.project,
+              "payment_attempted",
+              context,
+            ),
+            userId: params.userId,
+            projectId: params.projectId,
+            apiKeyId: params.apiKeyId,
+            customerId,
+            sessionId,
+            createdAt: new Date(createdAt.getTime() - 1),
+          });
+        }
+      }
+
+      if (purchaseOrdinal !== null && purchaseOrdinal % 12 === 0) {
+        const latestJourneyTimestamp = Math.max(
+          ...journeyEvents.map((event) => event.createdAt.getTime()),
+        );
+
+        counts.refund_issued += 1;
+        events.push({
+          name: "refund_issued",
+          properties: eventProperties(params.project, "refund_issued", context),
+          userId: params.userId,
+          projectId: params.projectId,
+          apiKeyId: params.apiKeyId,
+          customerId,
+          sessionId,
+          createdAt: new Date(latestJourneyTimestamp + 60_000),
         });
       }
     }
@@ -685,6 +793,23 @@ function summarizeFunnel(events: SeededEvent[]) {
   };
 }
 
+function summarizeContractCoverage(
+  events: SeededEvent[],
+): ContractCoverageStats {
+  const purchases = events.filter(
+    (event) => event.name === "purchase_completed",
+  );
+  const purchasesWithItems = purchases.filter(
+    (event) =>
+      Array.isArray(event.properties.items) && event.properties.items.length > 0,
+  ).length;
+
+  return {
+    purchasesWithItems,
+    purchasesWithoutItems: purchases.length - purchasesWithItems,
+  };
+}
+
 async function main() {
   const email = getSeedUserEmail();
   assertCanSeed(email);
@@ -716,6 +841,7 @@ async function main() {
     counts: Record<EventName, number>;
     funnel: ReturnType<typeof summarizeFunnel>;
     sessionStats: SessionStats;
+    contractCoverage: ContractCoverageStats;
   }[] = [];
 
   for (const projectSeed of DEMO_PROJECTS) {
@@ -776,6 +902,7 @@ async function main() {
       counts: seedRun.counts,
       funnel: summarizeFunnel(seedRun.events),
       sessionStats: seedRun.sessionStats,
+      contractCoverage: summarizeContractCoverage(seedRun.events),
     });
   }
 
@@ -801,6 +928,22 @@ async function main() {
   );
   const totalCheckoutAbandonedSessions = projectSummaries.reduce(
     (sum, project) => sum + project.sessionStats.checkoutAbandonedSessions,
+    0,
+  );
+  const totalPaymentAttempts = projectSummaries.reduce(
+    (sum, project) => sum + project.counts.payment_attempted,
+    0,
+  );
+  const totalRefunds = projectSummaries.reduce(
+    (sum, project) => sum + project.counts.refund_issued,
+    0,
+  );
+  const totalPurchasesWithItems = projectSummaries.reduce(
+    (sum, project) => sum + project.contractCoverage.purchasesWithItems,
+    0,
+  );
+  const totalPurchasesWithoutItems = projectSummaries.reduce(
+    (sum, project) => sum + project.contractCoverage.purchasesWithoutItems,
     0,
   );
 
@@ -839,6 +982,15 @@ async function main() {
     console.log(
       `    Approx checkout abandoned sessions: ${summary.sessionStats.checkoutAbandonedSessions}`,
     );
+    console.log("  Contract coverage:");
+    console.log(`    Payment attempts: ${summary.counts.payment_attempted}`);
+    console.log(`    Refunds issued: ${summary.counts.refund_issued}`);
+    console.log(
+      `    Purchases with items[]: ${summary.contractCoverage.purchasesWithItems}`,
+    );
+    console.log(
+      `    Purchases without items[]: ${summary.contractCoverage.purchasesWithoutItems}`,
+    );
   }
 
   console.log(`\nProjects created: ${projectSummaries.length}`);
@@ -849,6 +1001,10 @@ async function main() {
   console.log(`Approx purchase sessions: ${totalPurchaseSessions}`);
   console.log(`Approx abandoned cart sessions: ${totalAbandonedCartSessions}`);
   console.log(`Approx checkout abandoned sessions: ${totalCheckoutAbandonedSessions}`);
+  console.log(`Payment attempts generated: ${totalPaymentAttempts}`);
+  console.log(`Refunds issued: ${totalRefunds}`);
+  console.log(`Purchases with items[]: ${totalPurchasesWithItems}`);
+  console.log(`Purchases without items[]: ${totalPurchasesWithoutItems}`);
   console.log("\nGenerated API key secrets are local demo only:");
   for (const secret of apiKeySecrets) {
     console.log(`- ${secret.projectName}: ${secret.rawApiKey} (${secret.maskedKey})`);
