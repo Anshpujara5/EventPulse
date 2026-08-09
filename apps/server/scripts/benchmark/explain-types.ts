@@ -11,6 +11,7 @@ import type {
 
 export const ANALYTICS_QUERY_IDS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+  20, 21, 22, 23, 24, 25,
 ] as const;
 
 export type AnalyticsQueryId = (typeof ANALYTICS_QUERY_IDS)[number];
@@ -212,7 +213,7 @@ export interface CuratedAnalyticsBaseline {
   };
   http: {
     sourceRunId: string;
-    configuration: BenchmarkRunResult["configuration"];
+    configuration: Omit<BenchmarkRunResult["configuration"], "baseUrl">;
     contractCanaries: BenchmarkRunResult["contractCanaries"];
     cells: CuratedHttpCell[];
     summary: BenchmarkRunResult["summary"];

@@ -352,7 +352,7 @@ Usage:
 
 Options:
   --tier VALUE          Dataset tier; must match the manifest (required)
-  --queries LIST        Query ids 1..19, comma-separated, or all
+  --queries LIST        Query ids 1..25, comma-separated, or all
   --projects LIST       all,single
   --ranges LIST         24h,7d,30d,custom-long,all
   --warmups N           Priming EXPLAIN plans (default: 1; minimum: 1)
@@ -371,7 +371,7 @@ Safety:
   BEGIN READ ONLY and is always followed by ROLLBACK.
 
 Defaults:
-  Medium covers all 19 production SQL statements and their material scope/range
+  Medium covers all 25 production SQL statements and their material scope/range
   variants. Small defaults to the all-time day-granularity trend target only.
   Large is available for explicit targeted runs but is not run automatically.`;
 }
@@ -391,7 +391,7 @@ function buildExplainTargets(options: ExplainCliOptions): ExplainTarget[] {
       for (const range of options.ranges) {
         if (!definition.supportedRanges.includes(range)) continue;
         const allTimeGranularity =
-          definition.id === 13
+          range === "all" && (definition.id === 13 || definition.id === 22)
             ? options.tier === "small"
               ? "day"
               : "month"
@@ -948,6 +948,7 @@ const TAB_BUDGETS: CuratedAnalyticsBaseline["provisionalBudgets"]["tab"] = {
   products: { medianMs: 400, p95Ms: 800 },
   shoppers: { medianMs: 60, p95Ms: 120 },
   behavior: { medianMs: 200, p95Ms: 400 },
+  sales: { medianMs: 400, p95Ms: 800 },
 };
 
 function curateExplainTarget(target: ExplainTargetResult): CuratedExplainTarget {
@@ -984,11 +985,11 @@ function buildCuratedBaseline(input: {
   if (!input.http.dataset.databaseUnchanged || !input.explain.dataset.databaseUnchanged) {
     throw new Error("Cannot curate a run whose benchmark tenant counts changed.");
   }
-  if (input.http.summary.failedCells > 0 || input.http.cells.length !== 50) {
-    throw new Error("The curated HTTP baseline must contain 50 passing medium cells.");
+  if (input.http.summary.failedCells > 0 || input.http.cells.length !== 60) {
+    throw new Error("The curated HTTP baseline must contain 60 passing medium cells.");
   }
-  if (input.explain.summary.queriesCovered.length !== 19) {
-    throw new Error("The curated EXPLAIN baseline must cover all 19 queries.");
+  if (input.explain.summary.queriesCovered.length !== 25) {
+    throw new Error("The curated EXPLAIN baseline must cover all 25 queries.");
   }
 
   return {
@@ -1014,7 +1015,15 @@ function buildCuratedBaseline(input: {
     },
     http: {
       sourceRunId: input.http.runId,
-      configuration: input.http.configuration,
+      configuration: {
+        tabs: input.http.configuration.tabs,
+        projectScopes: input.http.configuration.projectScopes,
+        ranges: input.http.configuration.ranges,
+        warmups: input.http.configuration.warmups,
+        measuredRuns: input.http.configuration.measuredRuns,
+        sequentialRequests: input.http.configuration.sequentialRequests,
+        matrixCellCount: input.http.configuration.matrixCellCount,
+      },
       contractCanaries: input.http.contractCanaries,
       cells: input.http.cells.map((cell) => ({
         id: cell.id,

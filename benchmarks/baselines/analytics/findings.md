@@ -110,3 +110,82 @@ HTTP and EXPLAIN runs both recorded identical benchmark-scoped counts before and
 - The day-granularity all-time plan exists only on the small tier in this matrix, so it is not directly comparable to medium month granularity.
 - The large tier was not run because this handoff explicitly said not to run it without justification; medium remains the baseline of record.
 - No frontend render, cached-tab, or browser DevTools timing is included.
+
+# Phase 2E Sales Benchmark Extension
+
+> Additive findings for the Phase 2 Sales, Overview Sales KPI, and product/category line-item query surface. The Phase 0D-5 baseline and findings above remain the historical reference; the changed deterministic dataset has a new manifest identity and is not compared directly with the old dataset.
+
+## Phase 2 Baseline Identity
+
+- Baseline: `phase-2-514bbd9b-medium`
+- Source commit: `514bbd9b3f99aef43935e0bc0c191343a65d9c3f` (working tree intentionally dirty with Phase 2E benchmark changes)
+- Dataset: medium, seed `502`, fixed anchor `2026-08-09T08:00:00.000Z`, 90-day spread, 549,864 events
+- Dataset revision: `phase-2-sales-line-items-v1`
+- Manifest: `8c97632df42fe94439826c8b105c020b9373c9077b33bddf41a6fed8a61199a7`
+- HTTP coverage: 60 cells, 600 measured requests, 60 passed, 0 failed
+- EXPLAIN coverage: 205 targets across 25 query IDs, 205 completed, 0 failed
+- Method: HTTP 1 warm-up + 10 measured requests per cell; EXPLAIN 1 priming + 5 measured executions per target
+- Curated evidence: [phase-2-514bbd9b-medium.json](./phase-2-514bbd9b-medium.json) and [phase-2-514bbd9b-medium.md](./phase-2-514bbd9b-medium.md)
+- Raw evidence: `benchmarks/results/analytics/phase2-medium-*.{json,md}` (gitignored)
+
+## Deterministic Dataset Coverage
+
+Two guarded medium reseeds produced the same manifest hash, table counts, Phase 2 scenario counts, and full event-content fingerprint (`549864|-1583655645696646047697`). The dataset contains 3,359 successful-purchase profiles, 608 estimate-only purchases, 629 purchases without usable order IDs, 21 payment-only order IDs, 118 mixed-currency orders, 2,753 orders with usable `items[]`, 606 without `items[]`, and 674 multi-line order profiles. Each malformed money and malformed line-item category is deterministic and remains a small minority.
+
+Representative-order fixtures verified all three frozen tie-breaks: `purchase_completed` wins over an earlier lower-priority alias; equal event names choose the earliest timestamp; equal names and timestamps choose the smallest ID. Cross-project order IDs, `ORD1` versus `ord1`, and trimmed order IDs remain distinct or merged according to the production identity contract.
+
+## Sales HTTP Cells
+
+| Cell | Warm median | Warm p95 | Payload |
+|---|---:|---:|---:|
+| sales:single:24h | 19.187 ms | 21.886 ms | 3,091 B |
+| sales:single:7d | 65.808 ms | 69.157 ms | 2,201 B |
+| sales:single:30d | 587.086 ms | 610.904 ms | 3,332 B |
+| sales:single:custom-long | 961.365 ms | 1,007.015 ms | 4,148 B |
+| sales:single:all | 911.216 ms | 932.319 ms | 1,993 B |
+| sales:all:24h | 186.740 ms | 201.191 ms | 3,255 B |
+| sales:all:7d | 697.831 ms | 716.830 ms | 2,320 B |
+| sales:all:30d | 5,703.687 ms | 5,746.216 ms | 3,503 B |
+| sales:all:custom-long | 9,102.970 ms | 9,392.352 ms | 4,320 B |
+| sales:all:all | 1,098.846 ms | 1,141.868 ms | 2,119 B |
+
+The provisional Sales hypothesis is 400 ms median / 800 ms p95. Single-project 24h and 7d and all-project 24h remain within it; the other seven cells breach at least one bound. Payloads remain far below the 50 KiB hypothesis.
+
+## Phase 2 Query Summary
+
+| Query | Highest-cost measured target | Median | p95 | Plan observation |
+|---|---|---:|---:|---|
+| #20 Sales headline | all/custom-long | 1,490.947 ms | 1,495.135 ms | Two sequential scans; all/all uses an external merge sort |
+| #21 Sales comparison | all/custom-long | 9,557.819 ms | 10,056.116 ms | Merge join, sequential scan, and 1,193,976 temp blocks read |
+| #22 Sales trend | all/all/month | 177.903 ms | 179.928 ms | Within query budget; all/all uses an external merge sort |
+| #23 Overview Sales KPIs | single/custom-long | 1,598.637 ms | 1,619.684 ms | Merge join; strong range/scope-dependent planner behavior |
+| #24 Product line items | all/all | 123.354 ms | 131.093 ms | No temp blocks; one sequential scan at wide range |
+| #25 Category line items | all/all | 129.591 ms | 130.794 ms | No temp blocks; one sequential scan at wide range |
+
+Across the 60 new Phase 2 EXPLAIN targets, 38 contain a sequential scan, 7 use temp blocks, and 4 contain an external-merge sort. Product/category line-item targets do not spill in this medium dataset.
+
+## Phase 2 Findings
+
+| ID | Surface | Observation | Evidence | Verdict | Confidence / next evidence |
+|---|---|---|---|---|---|
+| F-P2E-01 | Sales comparison (#21) | All-project 30d and custom-long dominate the Sales tab at 6,345.335 ms and 9,557.819 ms median. Custom-long reads 1,193,976 temp blocks and removes 191,524 rows by filter in its representative plan. | Targets `q21-sales-comparison:all:30d` and `:all:custom-long`; corresponding HTTP cells are 5,703.687 ms and 9,102.970 ms median. | Critical measured budget breach; measurement only, no rewrite approved. | Confirmed at medium. Any future change needs semantic-equivalence fixtures and same-manifest before/after plans. |
+| F-P2E-02 | Sales headline (#20) | Cost grows from 51.818 ms all/24h to 1,490.947 ms all/custom-long. All/all is 1,071.482 ms and spills through an external merge sort (1,500 temp blocks written). | `q20-sales-headline:*` targets. | Wide-range query p95 exceeds the 300 ms hypothesis. | Confirmed at medium; large-tier scaling is not measured here. |
+| F-P2E-03 | Sales trend (#22) | The highest p95 is 179.928 ms at all/all/month, below the single-query hypothesis. That plan still uses an external merge sort with 1,499 temp blocks written. | `q22-sales-trend:*` targets. | Within provisional query budget, with a spill signal worth retaining. | Confirmed at medium; no action justified by this baseline alone. |
+| F-P2E-04 | Overview Sales KPIs (#23) and pool pressure | Overview now structurally launches 13 statements for all-project scope and 12 for single-project scope against the default pool maximum of 10; all-time adds the span query before that fan-out. Query #23 reaches 1,598.637 ms single/custom-long and 1,443.084 ms all/7d. | `summary.ts` composition plus `q23-overview-sales-kpis:*`; Overview HTTP cells reach 2,107.947 ms single/all and 1,755.985 ms all/7d. | Several Overview cells breach the tab hypothesis. Exact queue wait remains unmeasured. | Structural count confirmed; pool impact needs per-statement request timing before any concurrency or pool recommendation. |
+| F-P2E-05 | Product/category line attribution (#24/#25) | Line-item attribution remains below 132 ms p95 in every medium cell. Category is slightly slower than Product at all/all (129.591 vs 123.354 ms median). Neither query spills. | `q24-product-line-items:*` and `q25-category-line-items:*`. | Within provisional single-query budget. | Confirmed at medium; preserve these targets for future dataset/scale changes. |
+| F-P2E-06 | Scope and range sensitivity | Sales all-project/single-project median ratios are 9.73x (24h), 10.60x (7d), 9.72x (30d), 9.47x (custom-long), but only 1.21x (all-time). All-time does not execute the same previous-period work, so duration is not monotonic with range width. | Matched Sales HTTP cells and #20-#22 plans. | Scope is a major cost driver; range labels are not interchangeable workloads. | Confirmed directionally; causal attribution across the concurrent Sales statements requires request-level statement timing. |
+| F-P2E-07 | Mixed-currency coverage | The all-project scope includes a deterministic mixed-currency project (117 INR and 460 USD confirmed money rows in the runtime fixture) while single-project coverage remains exact-currency. The runner validates available/unavailable money discriminants without combining currencies. | Seeder manifest/runtime fixture and 60/60 HTTP correctness checks. | Contract path is exercised; no FX conversion or silent combination occurred. | Coverage confirmed, isolated latency impact needs a dedicated mixed-project matrix cell and is not claimed here. |
+| F-P2E-08 | Plan and timing stability | Immediate same-dataset repeat retained all 60 cells and all 205 targets with zero plan-shape changes. However, 40/60 HTTP cells were outside at least one provisional variance band, and 37/205 EXPLAIN medians moved by more than 15%; maximum payload delta was 0.971%. | Gitignored `phase2-medium-repeat-comparison.{json,md}`. | Timing remains directional and unsuitable for a hard CI gate. | Confirmed for one same-machine pair; collect more repeats before tightening bands. |
+| F-P2E-09 | Existing-tab regression coverage | Against the unchanged old manifest, all 50 pre-existing HTTP cells passed correctness. Tooling added 10 Sales cells and 60 Phase 2 EXPLAIN targets, with no removed cells or targets. Overview and Products payload growth reflects their already-merged additive Phase 2 fields. | Gitignored `phase2-step1-comparison.{json,md}` and unchanged-dataset run artifacts. | Existing API correctness remained stable; timing and planner differences are directional. | Runtime verified. Direct timing comparison after the seeder change is invalid because manifest hashes differ. |
+
+## Phase 2 Safety and Mutation Result
+
+Both HTTP runs and both EXPLAIN runs completed with identical benchmark-scoped table counts before and after: 2 users, 6 projects, 6 API keys, 549,864 events, 0 alerts, and 0 alert triggers. EXPLAIN targets ran in read-only transactions followed by rollback. The historical Phase 0D-5 baseline remains unchanged. No production analytics SQL semantics, schema, index, pool setting, or frontend file changed in Phase 2E.
+
+## Phase 2 Remaining Limitations
+
+- This is a medium-tier local workstation baseline, not a production SLO or CI timing gate.
+- The benchmark captures tab wall time and standalone EXPLAIN time, not per-statement timing inside concurrent HTTP requests.
+- Mixed-currency correctness is exercised in all-project scope, but its isolated latency impact is not measured.
+- Large-tier Sales/line-item plans were not run; the matrix and target selection support them, but no large Phase 2 dataset was seeded in this branch.
+- The updated manifest intentionally prevents direct timing comparison with the historical baseline; Step 1 provides the only valid unchanged-manifest regression comparison.

@@ -17,7 +17,7 @@
     "bench:run": "bun scripts/benchmark/run-benchmarks.ts",
     "bench:explain": "bun scripts/benchmark/explain-analytics.ts",
     "bench:compare": "bun scripts/benchmark/compare-baselines.ts",
-    "bench:typecheck": "tsc --noEmit --strict --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck scripts/benchmark/guard.ts scripts/benchmark/benchmark-types.ts scripts/benchmark/benchmark-utils.ts scripts/benchmark/run-benchmarks.ts scripts/benchmark/explain-types.ts scripts/benchmark/explain-query-registry.ts scripts/benchmark/explain-analytics.ts scripts/benchmark/compare-baselines.ts"
+    "bench:typecheck": "tsc --noEmit --strict --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck scripts/benchmark/guard.ts scripts/benchmark/benchmark-types.ts scripts/benchmark/benchmark-utils.ts scripts/benchmark/run-benchmarks.ts scripts/benchmark/explain-types.ts scripts/benchmark/explain-query-registry.ts scripts/benchmark/explain-analytics.ts scripts/benchmark/compare-baselines.ts scripts/benchmark/seed-benchmark-data.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.0.0",

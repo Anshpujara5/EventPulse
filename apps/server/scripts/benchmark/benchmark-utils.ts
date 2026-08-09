@@ -340,7 +340,7 @@ Environment:
   BENCHMARK_MANIFEST_PATH Optional manifest override for harness validation
 
 Defaults:
-  Small/medium run the plan's 50 cells: 5 tabs x 2 scopes x
+  Small/medium run 60 cells: 6 tabs x 2 scopes x
   {24h,7d,30d,custom-long,all}. custom-long is the deterministic 45-day
   calendar range from the plan; custom-short is supported when explicitly selected.
   Large uses the plan's targeted subset unless any matrix filter is supplied.`;
@@ -470,6 +470,12 @@ function manifestHash(manifest: BenchmarkDatasetManifest): string {
     actualTables: manifest.actual.tables,
     expectedEventNames: manifest.expected.eventNames,
     actualEventNames: manifest.actual.eventNames,
+    ...(manifest.datasetRevision
+      ? { datasetRevision: manifest.datasetRevision }
+      : {}),
+    ...(manifest.expected.phase2
+      ? { expectedPhase2: manifest.expected.phase2 }
+      : {}),
   };
 
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
@@ -506,6 +512,8 @@ export async function loadBenchmarkManifest(
   const actual = parsed.actual;
   if (
     parsed.version !== 1 ||
+    (parsed.datasetRevision !== undefined &&
+      typeof parsed.datasetRevision !== "string") ||
     !BENCHMARK_TIERS.includes(parsed.tier as BenchmarkTier) ||
     !isNonNegativeNumber(parsed.seed) ||
     typeof parsed.anchor !== "string" ||
@@ -533,6 +541,7 @@ export async function loadBenchmarkManifest(
       "secondaryCustomers",
       "secondarySessions",
     ]) ||
+    (expected.phase2 !== undefined && !validateEventNames(expected.phase2)) ||
     !validateTableCounts(actual.tables) ||
     !validateEventNames(actual.eventNames)
   ) {
@@ -591,6 +600,105 @@ function arrayField(value: Record<string, unknown>, key: string): boolean {
   return Array.isArray(value[key]);
 }
 
+function validateOrdersMeasurement(value: unknown, path: string): string[] {
+  if (!isRecord(value)) return [`${path} must be an object.`];
+
+  const issues: string[] = [];
+  if (
+    value.status !== "confirmed" &&
+    value.status !== "estimated" &&
+    value.status !== "unavailable"
+  ) {
+    return [`${path}.status must be confirmed, estimated, or unavailable.`];
+  }
+
+  if (typeof value.label !== "string" || typeof value.isEstimated !== "boolean") {
+    issues.push(`${path} must include label and isEstimated.`);
+  }
+
+  if (value.status === "confirmed") {
+    if (!isNonNegativeNumber(value.value)) {
+      issues.push(`${path}.value must be non-negative when confirmed.`);
+    }
+    if (value.basis !== "distinct-order-id" || value.isEstimated !== false) {
+      issues.push(`${path} confirmed basis must be distinct-order-id.`);
+    }
+    if (value.unlockGuidance !== null) {
+      issues.push(`${path}.unlockGuidance must be null when confirmed.`);
+    }
+  } else if (value.status === "estimated") {
+    if (!isNonNegativeNumber(value.value)) {
+      issues.push(`${path}.value must be non-negative when estimated.`);
+    }
+    if (value.basis !== "purchasing-session-estimate" || value.isEstimated !== true) {
+      issues.push(`${path} estimated basis must be purchasing-session-estimate.`);
+    }
+    if (typeof value.unlockGuidance !== "string") {
+      issues.push(`${path}.unlockGuidance must explain an estimated value.`);
+    }
+  } else {
+    if (value.value !== null || value.basis !== null || value.isEstimated !== false) {
+      issues.push(`${path} unavailable state must use null value and basis.`);
+    }
+    if (typeof value.unlockGuidance !== "string") {
+      issues.push(`${path}.unlockGuidance must explain an unavailable value.`);
+    }
+  }
+
+  return issues;
+}
+
+function validateMoneyMeasurement(value: unknown, path: string): string[] {
+  if (!isRecord(value)) return [`${path} must be an object.`];
+  if (value.status !== "available" && value.status !== "unavailable") {
+    return [`${path}.status must be available or unavailable.`];
+  }
+
+  const issues: string[] = [];
+  if (value.status === "available") {
+    if (
+      typeof value.dominantCurrency !== "string" ||
+      !isNonNegativeNumber(value.headlineGmv) ||
+      !isNonNegativeNumber(value.headlineAov) ||
+      !Array.isArray(value.currencies)
+    ) {
+      issues.push(`${path} available state must include currency, GMV, AOV, and currencies.`);
+    }
+    if (value.unlockGuidance !== null) {
+      issues.push(`${path}.unlockGuidance must be null when available.`);
+    }
+  } else {
+    if (
+      value.dominantCurrency !== null ||
+      value.headlineGmv !== null ||
+      value.headlineAov !== null ||
+      !Array.isArray(value.currencies)
+    ) {
+      issues.push(`${path} unavailable state must use null money fields and currencies[].`);
+    }
+    if (typeof value.unlockGuidance !== "string") {
+      issues.push(`${path}.unlockGuidance must explain unavailable money.`);
+    }
+  }
+  return issues;
+}
+
+function validateOverviewMoneyKpi(value: unknown, path: string): string[] {
+  if (!isRecord(value)) return [`${path} must be an object.`];
+  if (value.status !== "available" && value.status !== "unavailable") {
+    return [`${path}.status must be available or unavailable.`];
+  }
+  if (value.status === "available") {
+    return typeof value.currency === "string" && isNonNegativeNumber(value.value)
+      ? []
+      : [`${path} available state must include currency and a non-negative value.`];
+  }
+  return value.currency === null && value.value === null &&
+    typeof value.unlockGuidance === "string"
+    ? []
+    : [`${path} unavailable state must use null value/currency and unlock guidance.`];
+}
+
 export function validateAnalyticsPayload(
   tab: BenchmarkTab,
   payload: unknown,
@@ -612,6 +720,9 @@ export function validateAnalyticsPayload(
       if (!Array.isArray(data.insights)) issues.push("insights must be an array.");
       if (!isRecord(data.comparison)) issues.push("comparison must be an object.");
       if (!isRecord(data.health)) issues.push("health must be an object.");
+      issues.push(...validateOrdersMeasurement(data.orders, "orders"));
+      issues.push(...validateOverviewMoneyKpi(data.gmv, "gmv"));
+      issues.push(...validateOverviewMoneyKpi(data.aov, "aov"));
       return issues;
     }
     case "conversion": {
@@ -635,6 +746,47 @@ export function validateAnalyticsPayload(
         ];
       }
       return [];
+    }
+    case "sales": {
+      const issues = [
+        ...validateOrdersMeasurement(data.orders, "orders"),
+        ...validateMoneyMeasurement(data.money, "money"),
+      ];
+      if (
+        data.trend !== null &&
+        (!isRecord(data.trend) || !arrayField(data.trend, "points"))
+      ) {
+        issues.push("trend must be null or an object with points[].");
+      }
+      if (!isRecord(data.comparison)) issues.push("comparison must be an object.");
+      if (!Array.isArray(data.insights)) issues.push("insights must be an array.");
+      if (!isRecord(data.dataQuality)) {
+        issues.push("dataQuality must be an object.");
+      } else {
+        const countFields = [
+          "purchaseEvents",
+          "purchaseEventsWithOrderId",
+          "paymentOnlyOrderIds",
+          "missingOrderIdPurchaseEvents",
+          "ordersWithoutMoney",
+          "missingAmountOrders",
+          "invalidAmountOrders",
+          "negativeAmountOrders",
+          "missingCurrencyOrders",
+          "invalidCurrencyOrders",
+          "conflictingMoneyEvidence",
+        ];
+        if (!hasNonNegativeNumberFields(data.dataQuality, countFields)) {
+          issues.push("dataQuality count fields must be non-negative numbers.");
+        }
+        if (
+          data.dataQuality.purchaseEventsWithOrderIdPercent !== null &&
+          !isNonNegativeNumber(data.dataQuality.purchaseEventsWithOrderIdPercent)
+        ) {
+          issues.push("dataQuality.purchaseEventsWithOrderIdPercent must be null or non-negative.");
+        }
+      }
+      return issues;
     }
     case "shoppers": {
       const summary = data.shopperSummary;

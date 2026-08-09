@@ -112,7 +112,7 @@ export const ANALYTICS_QUERY_REGISTRY: AnalyticsQueryDefinition[] = [
     key: "all-time-span",
     module: "trend",
     label: "All-time event span",
-    tabs: ["overview"],
+    tabs: ["overview", "sales"],
     source: "apps/server/src/analytics/trend.ts:53",
     sourceStatementIndex: 1,
     supportedScopes: ["all", "single"],
@@ -217,6 +217,72 @@ export const ANALYTICS_QUERY_REGISTRY: AnalyticsQueryDefinition[] = [
     supportedScopes: ["all", "single"],
     supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
   },
+  {
+    id: 20,
+    key: "sales-headline",
+    module: "sales",
+    label: "Sales headline and data-quality aggregates",
+    tabs: ["sales"],
+    source: "apps/server/src/analytics/sales.ts:612",
+    sourceStatementIndex: 1,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
+  },
+  {
+    id: 21,
+    key: "sales-comparison",
+    module: "sales",
+    label: "Sales current and previous period aggregates",
+    tabs: ["sales"],
+    source: "apps/server/src/analytics/sales.ts:733",
+    sourceStatementIndex: 2,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
+  },
+  {
+    id: 22,
+    key: "sales-trend",
+    module: "sales",
+    label: "Sales order and GMV trend buckets",
+    tabs: ["sales"],
+    source: "apps/server/src/analytics/sales.ts:1315",
+    sourceStatementIndex: 4,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
+  },
+  {
+    id: 23,
+    key: "overview-sales-kpis",
+    module: "sales",
+    label: "Combined Overview Orders, GMV, and AOV aggregates",
+    tabs: ["overview"],
+    source: "apps/server/src/analytics/sales.ts:853",
+    sourceStatementIndex: 3,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
+  },
+  {
+    id: 24,
+    key: "product-line-items",
+    module: "lineItems",
+    label: "Product line-item attribution",
+    tabs: ["products"],
+    source: "apps/server/src/analytics/lineItems.ts:271",
+    sourceStatementIndex: 1,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
+  },
+  {
+    id: 25,
+    key: "category-line-items",
+    module: "lineItems",
+    label: "Category line-item attribution",
+    tabs: ["products"],
+    source: "apps/server/src/analytics/lineItems.ts:343",
+    sourceStatementIndex: 2,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
+  },
 ];
 
 interface CapturedQuery {
@@ -277,7 +343,18 @@ function hashSqlShape(query: Prisma.Sql): string {
 }
 
 async function getProductionModules() {
-  const [prismaModule, eventActivity, trend, comparison, commerce, session, shopper, product] =
+  const [
+    prismaModule,
+    eventActivity,
+    trend,
+    comparison,
+    commerce,
+    session,
+    shopper,
+    product,
+    sales,
+    lineItems,
+  ] =
     await Promise.all([
       import("../../src/config/prisma"),
       import("../../src/analytics/eventActivity"),
@@ -287,10 +364,22 @@ async function getProductionModules() {
       import("../../src/analytics/sessionFunnel"),
       import("../../src/analytics/shopperSummary"),
       import("../../src/analytics/productPerformance"),
+      import("../../src/analytics/sales"),
+      import("../../src/analytics/lineItems"),
     ]);
 
   productionPrisma = prismaModule.prisma as unknown as QueryRawHolder;
-  return { eventActivity, trend, comparison, commerce, session, shopper, product };
+  return {
+    eventActivity,
+    trend,
+    comparison,
+    commerce,
+    session,
+    shopper,
+    product,
+    sales,
+    lineItems,
+  };
 }
 
 async function captureQueries(operation: () => Promise<unknown>): Promise<Prisma.Sql[]> {
@@ -413,12 +502,77 @@ export async function captureProductionQuery(input: {
       ),
       "product performance",
     );
-  } else {
+  } else if (queryId === 19) {
     sql = oneQuery(
       await captureQueries(() =>
         modules.product.fetchCategoryPerformanceRows(input.scope),
       ),
       "category performance",
+    );
+  } else if (queryId === 20) {
+    sql = oneQuery(
+      await captureQueries(() => modules.sales.fetchSalesHeadline(input.scope)),
+      "sales headline",
+    );
+  } else if (queryId === 21) {
+    sql = oneQuery(
+      await captureQueries(() =>
+        modules.sales.fetchSalesComparisonRows(input.scope),
+      ),
+      "sales comparison",
+    );
+  } else if (queryId === 22) {
+    const allTimeSpanDays =
+      input.target.allTimeGranularity === "day"
+        ? 45
+        : input.target.allTimeGranularity === "month"
+          ? 90
+          : null;
+    const granularity = modules.trend.resolveTrendGranularity(
+      input.scope,
+      allTimeSpanDays,
+    );
+    if (!granularity) {
+      throw new Error("Sales trend capture could not resolve a granularity.");
+    }
+    sql = oneQuery(
+      await captureQueries(() =>
+        modules.sales.fetchSalesTrend({
+          scope: input.scope,
+          granularity,
+          orders: {
+            status: "confirmed",
+            basis: "distinct-order-id",
+            value: 1,
+            label: "Confirmed orders",
+            isEstimated: false,
+            unlockGuidance: null,
+          },
+          dominantCurrency: "USD",
+        }),
+      ),
+      "sales trend",
+    );
+  } else if (queryId === 23) {
+    sql = oneQuery(
+      await captureQueries(() =>
+        modules.sales.buildOverviewSalesKpis(input.scope),
+      ),
+      "Overview sales KPIs",
+    );
+  } else if (queryId === 24) {
+    sql = oneQuery(
+      await captureQueries(() =>
+        modules.lineItems.fetchProductLineItemAttribution(input.scope),
+      ),
+      "product line-item attribution",
+    );
+  } else {
+    sql = oneQuery(
+      await captureQueries(() =>
+        modules.lineItems.fetchCategoryLineItemAttribution(input.scope),
+      ),
+      "category line-item attribution",
     );
   }
 

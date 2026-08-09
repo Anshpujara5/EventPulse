@@ -609,7 +609,7 @@ function buildMoneyMeasurement(
   };
 }
 
-async function fetchSalesHeadline(
+export async function fetchSalesHeadline(
   scope: AnalyticsScope,
 ): Promise<SalesHeadlineResult> {
   const rows = await prisma.$queryRaw<HeadlineRow[]>`
@@ -730,7 +730,7 @@ async function fetchSalesHeadline(
   };
 }
 
-async function fetchSalesComparisonRows(
+export async function fetchSalesComparisonRows(
   scope: AnalyticsScope,
 ): Promise<ComparisonRow[]> {
   return prisma.$queryRaw<ComparisonRow[]>`
@@ -850,7 +850,7 @@ async function fetchSalesComparisonRows(
   `;
 }
 
-async function fetchOverviewSalesRows(
+export async function fetchOverviewSalesRows(
   scope: AnalyticsScope,
 ): Promise<OverviewSalesRow[]> {
   return prisma.$queryRaw<OverviewSalesRow[]>`
@@ -1312,7 +1312,7 @@ function trendBucketsCtes(
   `;
 }
 
-async function fetchSalesTrend(input: {
+export async function fetchSalesTrend(input: {
   scope: AnalyticsScope;
   granularity: TrendGranularity;
   orders: ConfirmedOrdersMeasurement | EstimatedOrdersMeasurement;

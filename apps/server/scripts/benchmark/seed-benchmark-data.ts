@@ -12,6 +12,7 @@ import {
   COMMERCE_FRICTION_ALIASES,
   PRODUCT_VIEW_ALIASES,
 } from "../../src/analytics/shared/aliases";
+import { ORDER_FACT_EVENT_NAMES } from "../../src/contract/orderIdentity";
 import {
   assertBenchmarkEnvironment,
   BENCHMARK_TENANT_EMAILS,
@@ -59,6 +60,38 @@ type GenerationStats = {
   sessions: number;
   events: number;
   eventNames: Record<string, number>;
+  phase2: Record<string, number>;
+};
+
+type ItemIssue =
+  | "malformed"
+  | "missing-product-id"
+  | "invalid-quantity"
+  | "invalid-price"
+  | "missing-category";
+
+type ItemSnapshot = "primary" | "alternate";
+
+type SeedJourneyEvent = {
+  name: string;
+  itemSnapshot?: ItemSnapshot;
+  timestampSlot?: number;
+  idSuffix?: string;
+};
+
+type Phase2OrderProfile = {
+  purchaseOrdinal: number;
+  orderId: string | null;
+  paymentOrderId: string | null;
+  amount: Prisma.InputJsonValue | undefined;
+  paymentAmount: Prisma.InputJsonValue | undefined;
+  currency: Prisma.InputJsonValue | undefined;
+  paymentCurrency: Prisma.InputJsonValue | undefined;
+  hasItems: boolean;
+  multiLineItems: boolean;
+  itemIssue: ItemIssue | null;
+  representativeCase: "event-priority" | "earliest-time" | "smallest-id" | null;
+  scenario: string | null;
 };
 
 type TableCounts = {
@@ -165,7 +198,7 @@ const PRODUCT_EVENT_NAMES = new Set<string>([
   "cart_viewed",
   "payment_attempted",
   "payment_failed",
-  "purchase_completed",
+  ...ORDER_FACT_EVENT_NAMES,
   "payment_completed",
   "item_out_of_stock",
   "item_unavailable",
@@ -176,9 +209,10 @@ const VIEW_OR_CART_EVENT_NAMES = new Set<string>([
   "cart_viewed",
 ]);
 const PURCHASE_EVENT_NAMES = new Set<string>([
-  "purchase_completed",
+  ...ORDER_FACT_EVENT_NAMES,
   "payment_completed",
 ]);
+const ORDER_FACT_EVENT_NAME_SET = new Set<string>(ORDER_FACT_EVENT_NAMES);
 const CHECKOUT_EVENT_NAMES = new Set<string>([
   ...CHECKOUT_ALIASES,
   "payment_attempted",
@@ -190,6 +224,7 @@ const HOUR_MS = 60 * 60 * 1_000;
 const DAY_MS = 24 * HOUR_MS;
 // Benchmark-only fixed salt keeps account rows deterministic across reseeds.
 const BENCHMARK_PASSWORD_SALT = "$2a$10$N9qo8uLOickgx2ZMRZoMye";
+const DATASET_REVISION = "phase-2-sales-line-items-v1";
 const MANIFEST_DIRECTORY = path.resolve(
   __dirname,
   "../../../../benchmarks",
@@ -211,6 +246,215 @@ function pick<T>(items: readonly T[], rng: Rng): T {
 
 function money(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function incrementCount(counts: Record<string, number>, key: string) {
+  counts[key] = (counts[key] ?? 0) + 1;
+}
+
+function phase2OrderProfile(input: {
+  tenantKey: string;
+  project: SeedProject;
+  projectCount: number;
+  sessionIndex: number;
+  purchaseOrdinal: number;
+  amount: number;
+}): Phase2OrderProfile {
+  const caseIndex = input.purchaseOrdinal % 149;
+  const estimateOnlyProject =
+    input.tenantKey === "primary" &&
+    input.project.index === input.projectCount - 1;
+  let orderId: string | null =
+    input.purchaseOrdinal === 0
+      ? "bench_shared_order_1"
+      : input.purchaseOrdinal === 1
+        ? "ORD1"
+        : input.purchaseOrdinal === 2
+          ? "ord1"
+          : input.purchaseOrdinal === 3
+            ? "  bench_whitespace_order_1  "
+            : `bench_order_${input.tenantKey}_${input.project.index + 1}_${input.sessionIndex + 1}`;
+  let amount: Prisma.InputJsonValue | undefined = input.amount;
+  let currency: Prisma.InputJsonValue | undefined =
+    input.project.index === 1 && input.purchaseOrdinal % 5 === 0
+      ? "INR"
+      : "USD";
+  let scenario: string | null = null;
+
+  if (estimateOnlyProject || caseIndex === 14) {
+    orderId = null;
+    scenario = estimateOnlyProject ? "estimate-only-purchase" : "missing-order-id";
+  } else if (caseIndex === 15) {
+    orderId = "   ";
+    scenario = "whitespace-only-order-id";
+  } else if (caseIndex === 4) {
+    amount = undefined;
+    scenario = "missing-amount";
+  } else if (caseIndex === 5) {
+    amount = "1,299";
+    scenario = "malformed-amount";
+  } else if (caseIndex === 6) {
+    amount = "1.999";
+    scenario = "excess-precision-amount";
+  } else if (caseIndex === 7) {
+    amount = -input.amount;
+    scenario = "negative-amount";
+  } else if (caseIndex === 8) {
+    amount = 0;
+    scenario = "zero-amount";
+  } else if (caseIndex === 9) {
+    currency = undefined;
+    scenario = "missing-currency";
+  } else if (caseIndex === 10) {
+    currency = "usd";
+    scenario = "lowercase-currency";
+  } else if (caseIndex === 11) {
+    currency = "Usd";
+    scenario = "mixed-case-currency";
+  } else if (caseIndex === 12) {
+    scenario = "conflicting-money";
+  } else if (caseIndex === 13) {
+    scenario = "payment-only-order-id";
+  }
+
+  const itemCase = input.purchaseOrdinal % 53;
+  const itemIssue: ItemIssue | null =
+    itemCase === 16
+      ? "malformed"
+      : itemCase === 17
+        ? "missing-product-id"
+        : itemCase === 18
+          ? "invalid-quantity"
+          : itemCase === 19
+            ? "invalid-price"
+            : itemCase === 20
+              ? "missing-category"
+              : null;
+  const representativeCase = estimateOnlyProject
+    ? null
+    : input.purchaseOrdinal === 0
+      ? "event-priority"
+      : input.purchaseOrdinal === 1
+        ? "earliest-time"
+        : input.purchaseOrdinal === 2
+          ? "smallest-id"
+          : null;
+  const multiLineItems = input.purchaseOrdinal % 5 === 0;
+  const hasItems =
+    representativeCase !== null ||
+    itemIssue !== null ||
+    multiLineItems ||
+    input.purchaseOrdinal % 4 !== 0;
+  const paymentOrderId =
+    orderId !== null && orderId.trim() && caseIndex === 13
+      ? `${orderId.trim()}_payment_only`
+      : orderId;
+  const paymentAmount =
+    caseIndex === 12 && typeof amount === "number"
+      ? money(amount + 7.25)
+      : amount;
+
+  return {
+    purchaseOrdinal: input.purchaseOrdinal,
+    orderId,
+    paymentOrderId,
+    amount,
+    paymentAmount,
+    currency,
+    paymentCurrency: currency,
+    hasItems,
+    multiLineItems,
+    itemIssue,
+    representativeCase,
+    scenario,
+  };
+}
+
+function recordPhase2Profile(
+  counts: Record<string, number>,
+  profile: Phase2OrderProfile,
+  project: SeedProject,
+) {
+  incrementCount(counts, "successfulPurchases");
+  if (profile.orderId === null) incrementCount(counts, "missingOrderIds");
+  if (profile.orderId !== null && !profile.orderId.trim()) {
+    incrementCount(counts, "whitespaceOnlyOrderIds");
+  }
+  if (profile.orderId?.startsWith("  ")) {
+    incrementCount(counts, "trimmedOrderIds");
+  }
+  if (profile.orderId === "bench_shared_order_1") {
+    incrementCount(counts, "crossProjectOrderIds");
+  }
+  if (profile.orderId === "ORD1" || profile.orderId === "ord1") {
+    incrementCount(counts, "caseSensitiveOrderIds");
+  }
+  if (profile.paymentOrderId !== profile.orderId) {
+    incrementCount(counts, "paymentOnlyOrderIds");
+  }
+  if (profile.currency === "INR") incrementCount(counts, "mixedCurrencyOrders");
+  if (profile.scenario) incrementCount(counts, profile.scenario);
+  if (profile.hasItems) incrementCount(counts, "ordersWithItems");
+  else incrementCount(counts, "ordersWithoutItems");
+  if (profile.multiLineItems) incrementCount(counts, "multiLineOrders");
+  if (profile.itemIssue) incrementCount(counts, `items-${profile.itemIssue}`);
+  if (profile.representativeCase) {
+    incrementCount(counts, `representative-${profile.representativeCase}`);
+  }
+  if (project.index === 1) incrementCount(counts, "mixedCurrencyProjectOrders");
+}
+
+function buildSeedJourneyEvents(
+  names: string[],
+  profile: Phase2OrderProfile | null,
+): SeedJourneyEvent[] {
+  const events: SeedJourneyEvent[] = names.map((name) => ({ name }));
+  if (!profile) return events;
+
+  const purchaseIndex = events.findIndex(
+    (event) => event.name === "purchase_completed",
+  );
+  if (purchaseIndex < 0) return events;
+
+  if (profile.representativeCase === "event-priority") {
+    events.splice(
+      purchaseIndex,
+      1,
+      { name: "order_placed", itemSnapshot: "alternate" },
+      { name: "purchase_completed", itemSnapshot: "primary" },
+    );
+  } else if (profile.representativeCase === "earliest-time") {
+    events.splice(
+      purchaseIndex,
+      1,
+      { name: "purchase_completed", itemSnapshot: "primary" },
+      { name: "purchase_completed", itemSnapshot: "alternate" },
+    );
+  } else if (profile.representativeCase === "smallest-id") {
+    events.splice(
+      purchaseIndex,
+      1,
+      {
+        name: "purchase_completed",
+        itemSnapshot: "primary",
+        timestampSlot: purchaseIndex,
+        idSuffix: "a",
+      },
+      {
+        name: "purchase_completed",
+        itemSnapshot: "alternate",
+        timestampSlot: purchaseIndex,
+        idSuffix: "b",
+      },
+    );
+  } else {
+    events[purchaseIndex] = {
+      name: "purchase_completed",
+      itemSnapshot: "primary",
+    };
+  }
+
+  return events;
 }
 
 function parseTier(): TierName {
@@ -665,6 +909,86 @@ function createFillerValue(
   }
 }
 
+function productWithOffset(
+  project: SeedProject,
+  product: Product,
+  offset: number,
+): Product {
+  const currentIndex = Math.max(0, project.products.indexOf(product));
+  return (
+    project.products[(currentIndex + offset) % project.products.length] ?? product
+  );
+}
+
+function validItemLine(product: Product, quantity: number): Prisma.InputJsonObject {
+  return {
+    product_id: product.id,
+    product_name: product.name,
+    category: product.category,
+    quantity,
+    price: product.price,
+  };
+}
+
+function createOrderItems(input: {
+  project: SeedProject;
+  product: Product;
+  quantity: number;
+  profile: Phase2OrderProfile;
+  snapshot: ItemSnapshot;
+}): Prisma.InputJsonArray {
+  const offset = input.snapshot === "alternate" ? 3 : 0;
+  const firstProduct = productWithOffset(input.project, input.product, offset);
+  const lines: Prisma.InputJsonValue[] = [
+    validItemLine(
+      firstProduct,
+      input.snapshot === "alternate" ? input.quantity + 1 : input.quantity,
+    ),
+  ];
+
+  if (input.profile.multiLineItems) {
+    lines.push(
+      validItemLine(
+        productWithOffset(input.project, firstProduct, 1),
+        1 + (input.profile.purchaseOrdinal % 2),
+      ),
+    );
+  }
+
+  const issueProduct = productWithOffset(input.project, firstProduct, 2);
+  if (input.profile.itemIssue === "malformed") {
+    lines.push("malformed-benchmark-line");
+  } else if (input.profile.itemIssue === "missing-product-id") {
+    lines.push({
+      category: issueProduct.category,
+      quantity: 1,
+      price: issueProduct.price,
+    });
+  } else if (input.profile.itemIssue === "invalid-quantity") {
+    lines.push({
+      product_id: issueProduct.id,
+      category: issueProduct.category,
+      quantity: "many",
+      price: issueProduct.price,
+    });
+  } else if (input.profile.itemIssue === "invalid-price") {
+    lines.push({
+      product_id: issueProduct.id,
+      category: issueProduct.category,
+      quantity: 1,
+      price: "1,299",
+    });
+  } else if (input.profile.itemIssue === "missing-category") {
+    lines.push({
+      product_id: issueProduct.id,
+      quantity: 1,
+      price: issueProduct.price,
+    });
+  }
+
+  return lines;
+}
+
 function createProperties(input: {
   eventName: string;
   product: Product;
@@ -674,6 +998,8 @@ function createProperties(input: {
   orderId: string;
   quantity: number;
   amount: number;
+  orderProfile: Phase2OrderProfile | null;
+  itemSnapshot?: ItemSnapshot;
 }): Prisma.InputJsonObject {
   const normalizedName = input.eventName.toLowerCase();
   const properties: Record<string, Prisma.InputJsonValue> = {
@@ -684,6 +1010,7 @@ function createProperties(input: {
   const isProductEvent = PRODUCT_EVENT_NAMES.has(normalizedName);
   const isViewOrCartEvent = VIEW_OR_CART_EVENT_NAMES.has(normalizedName);
   const isPurchaseEvent = PURCHASE_EVENT_NAMES.has(normalizedName);
+  const isOrderFactEvent = ORDER_FACT_EVENT_NAME_SET.has(normalizedName);
   const isCheckoutEvent = CHECKOUT_EVENT_NAMES.has(normalizedName);
 
   if (normalizedName === "category_viewed") {
@@ -735,22 +1062,47 @@ function createProperties(input: {
   }
 
   if (isPurchaseEvent) {
-    properties.order_id = input.orderId;
-    properties.amount = input.amount;
-    properties.currency = "USD";
+    const isPaymentCompleted = normalizedName === "payment_completed";
+    const orderId = isPaymentCompleted
+      ? input.orderProfile?.paymentOrderId
+      : input.orderProfile?.orderId;
+    const amount = isPaymentCompleted
+      ? input.orderProfile?.paymentAmount
+      : input.orderProfile?.amount;
+    const currency = isPaymentCompleted
+      ? input.orderProfile?.paymentCurrency
+      : input.orderProfile?.currency;
+
+    if (orderId === null || orderId === undefined) {
+      blockedFillerKeys.add("order_id");
+    } else {
+      properties.order_id = orderId;
+    }
+    if (amount === undefined) {
+      blockedFillerKeys.add("amount");
+    } else {
+      properties.amount = amount;
+    }
+    if (currency === undefined) {
+      blockedFillerKeys.add("currency");
+    } else {
+      properties.currency = currency;
+    }
     properties.payment_method = pick(["card", "wallet", "bank_transfer"], input.rng);
     properties.status = "succeeded";
 
-    if (input.rng() < 0.6) {
-      properties.items = [
-        {
-          product_id: input.product.id,
-          product_name: input.product.name,
-          category: input.product.category,
-          quantity: input.quantity,
-          price: input.product.price,
-        },
-      ];
+    if (
+      isOrderFactEvent &&
+      input.orderProfile?.hasItems &&
+      input.itemSnapshot
+    ) {
+      properties.items = createOrderItems({
+        project: input.project,
+        product: input.product,
+        quantity: input.quantity,
+        profile: input.orderProfile,
+        snapshot: input.itemSnapshot,
+      });
     }
   }
 
@@ -842,6 +1194,7 @@ async function seedTenantEvents(
     (_, index) => `bench_customer_shared_${index + 1}`,
   );
   const eventNames: Record<string, number> = {};
+  const phase2: Record<string, number> = {};
   let eventBatch: Prisma.EventCreateManyInput[] = [];
   let eventCount = 0;
   let globalSessionIndex = 0;
@@ -868,6 +1221,7 @@ async function seedTenantEvents(
         `bench_customer_${input.tenantKey}_${project.index + 1}_${index + 1}`,
     );
     const customerPool = [...sharedCustomerIds, ...localCustomerIds];
+    let successfulPurchaseOrdinal = 0;
 
     for (let sessionIndex = 0; sessionIndex < sessionCount; sessionIndex += 1) {
       const sharedCustomer =
@@ -878,28 +1232,58 @@ async function seedTenantEvents(
       const sessionId = `bench_session_${input.tenantKey}_${project.index + 1}_${sessionIndex + 1}`;
       const product = pick(project.products, rng);
       const journey = selectJourney(rng);
-      const eventSequence = buildJourneyEventNames(journey, rng);
       const sessionOffset = sampleTimestampOffset(globalSessionIndex);
       const sessionStart = input.anchor.getTime() - sessionOffset;
       const quantity = 1 + Math.floor(rng() * 4);
       const deliveryFee = money(1.99 + Math.floor(rng() * 5));
       const amount = money(product.price * quantity + deliveryFee);
       const orderId = `bench_order_${input.tenantKey}_${project.index + 1}_${sessionIndex + 1}`;
+      const orderProfile =
+        journey === "successful_purchase"
+          ? phase2OrderProfile({
+              tenantKey: input.tenantKey,
+              project,
+              projectCount: input.projects.length,
+              sessionIndex,
+              purchaseOrdinal: successfulPurchaseOrdinal,
+              amount,
+            })
+          : null;
+      if (orderProfile) {
+        recordPhase2Profile(phase2, orderProfile, project);
+        successfulPurchaseOrdinal += 1;
+      }
+      const eventSequence = buildSeedJourneyEvents(
+        buildJourneyEventNames(journey, rng),
+        orderProfile,
+      );
+      const eventSessionStart = orderProfile?.representativeCase
+        ? Math.min(
+            sessionStart,
+            input.anchor.getTime() - (eventSequence.length + 1) * 90_000,
+          )
+        : sessionStart;
 
       for (let sequenceIndex = 0; sequenceIndex < eventSequence.length; sequenceIndex += 1) {
-        const canonicalEventName = eventSequence[sequenceIndex] ?? "page_viewed";
+        const eventDefinition = eventSequence[sequenceIndex] ?? {
+          name: "page_viewed",
+        };
+        const canonicalEventName = eventDefinition.name;
         const eventName = maybeMixCase(canonicalEventName, rng);
+        const timestampSlot = eventDefinition.timestampSlot ?? sequenceIndex;
         const createdAt = new Date(
           Math.min(
             input.anchor.getTime() - 1_000,
-            sessionStart + sequenceIndex * 90_000,
+            eventSessionStart + timestampSlot * 90_000,
           ),
         );
         const rowSessionId = rng() < 0.05 ? null : sessionId;
         const rowCustomerId = rng() < 0.08 ? null : customerId;
 
         eventBatch.push({
-          id: `bench-event-${input.tenantKey}-${input.tier}-${globalSessionIndex + 1}-${sequenceIndex + 1}`,
+          id:
+            `bench-event-${input.tenantKey}-${input.tier}-${globalSessionIndex + 1}-` +
+            (eventDefinition.idSuffix ?? String(sequenceIndex + 1)),
           name: eventName,
           properties: createProperties({
             eventName: canonicalEventName,
@@ -910,6 +1294,8 @@ async function seedTenantEvents(
             orderId,
             quantity,
             amount,
+            orderProfile,
+            itemSnapshot: eventDefinition.itemSnapshot,
           }),
           userId: input.userId,
           projectId: project.id,
@@ -940,6 +1326,7 @@ async function seedTenantEvents(
     sessions: input.config.sessions,
     events: eventCount,
     eventNames,
+    phase2,
   };
 }
 
@@ -1013,6 +1400,7 @@ async function writeManifest(input: {
   actualTables: TableCounts;
   expectedEventNames: Record<string, number>;
   actualEventNames: Record<string, number>;
+  expectedPhase2: Record<string, number>;
   primaryStats: GenerationStats;
   secondaryStats: GenerationStats | null;
 }) {
@@ -1023,12 +1411,15 @@ async function writeManifest(input: {
     actualTables: input.actualTables,
     expectedEventNames: input.expectedEventNames,
     actualEventNames: input.actualEventNames,
+    datasetRevision: DATASET_REVISION,
+    expectedPhase2: input.expectedPhase2,
   };
   const manifestHash = createHash("sha256")
     .update(JSON.stringify(hashInput))
     .digest("hex");
   const manifest = {
     version: 1,
+    datasetRevision: DATASET_REVISION,
     tier: input.tier,
     seed: input.config.seed,
     anchor: input.anchor.toISOString(),
@@ -1052,6 +1443,7 @@ async function writeManifest(input: {
         secondaryCustomers: input.secondaryStats?.customers ?? 0,
         secondarySessions: input.secondaryStats?.sessions ?? 0,
       },
+      phase2: input.expectedPhase2,
     },
     actual: {
       tables: input.actualTables,
@@ -1165,6 +1557,10 @@ async function main() {
       primaryStats.eventNames,
       secondaryStats?.eventNames ?? {},
     );
+    const expectedPhase2 = mergeEventCounts(
+      primaryStats.phase2,
+      secondaryStats?.phase2 ?? {},
+    );
     const expectedTables: TableCounts = {
       users: activeUserIds.length,
       projects: config.projects + (secondaryUser ? SECONDARY_CONFIG.projects : 0),
@@ -1189,6 +1585,7 @@ async function main() {
       actualTables: actual.tables,
       expectedEventNames,
       actualEventNames: actual.eventNames,
+      expectedPhase2,
       primaryStats,
       secondaryStats,
     });

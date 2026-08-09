@@ -2,6 +2,7 @@ export const BENCHMARK_TABS = [
   "overview",
   "conversion",
   "products",
+  "sales",
   "shoppers",
   "behavior",
 ] as const;
@@ -36,6 +37,7 @@ export interface BenchmarkTableCounts {
 
 export interface BenchmarkDatasetManifest {
   version: number;
+  datasetRevision?: string;
   tier: BenchmarkTier;
   seed: number;
   anchor: string;
@@ -59,6 +61,7 @@ export interface BenchmarkDatasetManifest {
       secondaryCustomers: number;
       secondarySessions: number;
     };
+    phase2?: Record<string, number>;
   };
   actual: {
     tables: BenchmarkTableCounts;
