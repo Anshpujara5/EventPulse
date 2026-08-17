@@ -158,6 +158,23 @@ export interface ShopperSummary {
   purchasingSessions: number;
 }
 
+// MIRROR: apps/server/src/analytics/shopperTrend.ts
+export interface ShopperTrendPoint {
+  date: string;
+  shoppers: number;
+}
+
+export interface ShopperTrend {
+  granularity: TrendGranularity;
+  points: ShopperTrendPoint[];
+}
+
+export interface ShopperCoverage {
+  eventsInScope: number;
+  eventsWithCustomerId: number;
+  excludedPercent: number | null;
+}
+
 // MIRROR: apps/server/src/analytics/lineItems.ts
 export interface ItemsCoverage {
   status: "complete" | "partial" | "unavailable";
@@ -307,6 +324,8 @@ export interface ProductsTabData {
 
 export interface ShoppersTabData {
   shopperSummary: ShopperSummary;
+  shopperTrend: ShopperTrend;
+  shopperCoverage: ShopperCoverage;
 }
 
 export interface BehaviorTabData {

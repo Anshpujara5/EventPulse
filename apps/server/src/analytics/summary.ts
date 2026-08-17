@@ -49,6 +49,11 @@ import {
   type SalesTabData,
 } from "./sales";
 import { fetchShopperSummary, type ShopperSummary } from "./shopperSummary";
+import {
+  fetchShopperTrend,
+  type ShopperCoverage,
+  type ShopperTrend,
+} from "./shopperTrend";
 import { roundPct } from "./shared/numbers";
 import {
   fetchTrackingReadiness,
@@ -101,6 +106,8 @@ export interface ProductsTabData {
 
 export interface ShoppersTabData {
   shopperSummary: ShopperSummary;
+  shopperTrend: ShopperTrend;
+  shopperCoverage: ShopperCoverage;
 }
 
 export interface BehaviorTabData {
@@ -263,7 +270,20 @@ export async function buildSalesSummary(
 export async function buildShoppersSummary(
   scope: AnalyticsScope,
 ): Promise<ShoppersTabData> {
-  return { shopperSummary: await fetchShopperSummary(scope) };
+  const allTimeSpanDays = scope.range.isAllTime
+    ? await fetchTrendSpanDays(scope)
+    : null;
+  const trendGranularity = resolveTrendGranularity(scope, allTimeSpanDays);
+  const [shopperSummary, shopperTrendResult] = await Promise.all([
+    fetchShopperSummary(scope),
+    fetchShopperTrend(scope, trendGranularity),
+  ]);
+
+  return {
+    shopperSummary,
+    shopperTrend: shopperTrendResult.trend,
+    shopperCoverage: shopperTrendResult.coverage,
+  };
 }
 
 export async function buildBehaviorSummary(
