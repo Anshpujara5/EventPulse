@@ -42,8 +42,8 @@ Binding implementation requirements:
 - The visible metric correction is **documented explicitly** in the PR body and in the tab's copy, framed as a conformance fix to the project-scoped identity rule.
 - The legacy `purchasingSessions` basis is **not** changed (P3-P1).
 
-**P3-P6 — B2 scope. LOCKED — split summary only; the stacked trend is deferred.**
-Phase 3 ships the New vs Returning **split summary**. The blueprint's stacked new/returning trend is **not** implemented in Phase 3, for the reasons approved: B1 already supplies the tab's time-series view; the split summary answers B2's core business question; and a per-bucket stacked trend would require expensive historical first-seen timestamps per customer, which is exactly the shape P3-A2 rejects. The stacked trend is recorded as explicit product/technical debt for a later phase (see Stop Conditions).
+**P3-P6 — B2 scope. LOCKED — one lifecycle statement ships both summary and series.**
+Phase 3C ships the selected-period New vs Returning **split summary** and the blueprint's **per-bucket lifecycle series** from one statement. Bounded ranges normalize pre-range identities once into a distinct shopper set and left join it to active shoppers; the rejected correlated historical `EXISTS` caused pathological repeated range scans. `MIN(createdAt)` over rows already constrained to the selected range identifies the first bucket for shoppers without prior history. A shopper is New only in that first bucket and Returning in every later active bucket, so `new + returning = B1 active` in every bucket. All-time performs no historical scan: its summary is not-applicable, while the first observed bucket is New and later active buckets are Returning. No index, schema change, lazy-loading infrastructure, or details endpoint is added. Progressive disclosure of the two views lands later in 3E and is presentation only, not lazy loading.
 
 ## Architecture decisions
 
@@ -51,13 +51,13 @@ Phase 3 ships the New vs Returning **split summary**. The blueprint's stacked ne
 *Rationale:* exporting `salesFactsCtes` from `sales.ts` would make the shoppers module depend on a sibling feature module (wrong dependency direction); a shopper-only copy would fork order identity, which blueprint Part 5 and ADR 17 exist to prevent. Extraction yields one definition, a clean direction (both features depend on shared), and a mechanical, provable diff.
 *Constraint:* shopper queries reference only `identity_representatives` (and `money_representatives` for B4 GMV). Branch 3D must **verify by EXPLAIN** whether unreferenced CTEs from the chain appear in the shopper plan. If they carry measurable cost, the remedy is to split the builder into `orderIdentityCtes()` and `orderMoneyCtes()` — reported, not applied unilaterally.
 
-**P3-A2 — B2 first-seen model. LOCKED: `NOT EXISTS` anti-join, never `MIN(createdAt)`.**
-*Justification:* B2 as scoped by P3-P6 needs only a **boolean** — does any event for this `(projectId, customerId)` exist before the range start? — never the actual first-seen timestamp. `MIN(createdAt)` per customer must aggregate every historical row for every customer; the anti-join probes the existing `(projectId, customerId)` index and stops at the first match. Work scales with *shoppers active in range*, not with total retained history.
+**P3-A2 — B2 first-seen model. LOCKED: pre-range distinct shopper set plus range-scoped `MIN(createdAt)`.**
+*Justification:* B2 needs one historical boolean — does an event for this `(projectId, customerId)` exist before the range start? Bounded ranges derive it by normalizing retained history once into a distinct shopper set and left joining that set to active shoppers. The correlated `EXISTS` formulation was rejected after medium-tier plans exceeded 60–180 seconds through repeated historical scans. For shoppers without pre-range history, `MIN(createdAt)` is computed only over their already range-scoped rows to identify the first lifecycle bucket. No global historical first-seen aggregation is allowed.
 *Tenant safety:* the pre-range read is bounded by the new scope fragment carrying ownership and project; the shopper module never composes its own boundary (ADR 9).
-*Range semantics:* when the range has no lower bound (all-time), there is no "before" — B2 reports an honest not-applicable state rather than "100% new."
-*Planner expectation:* a semi/anti-join with one index probe per active shopper; `createdAt` requires a heap fetch because `(projectId, customerId)` does not include it. Measure before judging.
+*Range semantics:* when the range has no lower bound (all-time), there is no "before" — the selected-period summary is honestly not-applicable, while the series treats each shopper's first observed bucket as New and later active buckets as Returning.
+*Planner expectation:* one scoped pre-range scan/normalization followed by a set join; no per-shopper historical SubPlan loop.
 *Statement count:* 1.
-*Index:* none added. If EXPLAIN shows heap access dominating, file a `(projectId, customerId, createdAt)` candidate against the standards §9 evidence bar for a **separate, separately-approved** branch.
+*Index:* none added. The measured replacement passed without a new index, so the standards §9 index evidence bar is not satisfied.
 
 **P3-A3 — Module boundaries. LOCKED.** `shopperSummary.ts` remains the legacy KPI module (touched only in 3E, for P3-P5). New siblings: `shopperTrend.ts` (B1), `shopperLifecycle.ts` (B2), `shopperOrders.ts` (B3+B4). Each holds one query plus pure builders — coherent and independently reviewable, matching the 0D-3 module pattern.
 
@@ -79,7 +79,7 @@ Phase 2 (merged)
    │
    ├────────────► 3B  B1 Active Shoppers Trend        (independent of 3A)
    │
-   ├────────────► 3C  B2 New vs Returning split       (adds scope fragment)
+   ├────────────► 3C  B2 New vs Returning lifecycle   (adds scope fragment)
    │
    └────────────► 3D  B3 Repeat Purchase + B4 Top Shoppers   (requires 3A)
                           │
@@ -244,7 +244,7 @@ export interface ShopperCoverage {
 
 **1. Branch name:** `feature/shopper-new-returning`
 
-**2. Goal:** B2 — split active shoppers into new versus returning for the selected range. **Split summary only; the stacked trend is out of scope (P3-P6).**
+**2. Goal:** B2 — return a selected-period New vs Returning split and a per-bucket lifecycle series from one statement, subject to the P3-P6 EXPLAIN gate.
 
 **3. Dependencies:** None hard. P3-P6 is locked, so this branch's scope is fixed.
 
@@ -256,65 +256,60 @@ export interface ShopperCoverage {
 
 **7. Step-by-step:**
 1. Add `priorToRangeEvent: Prisma.Sql | null` to `AnalyticsScopeSql`, built with the file's existing private boundary helpers as ownership + project + `createdAt <` range start, expressed for the correlation alias `prior`. It is **null when the range has no lower bound** (all-time). Change no existing fragment.
-2. Write `fetchShopperLifecycle(scope)` per §9, short-circuiting in TypeScript when `priorToRangeEvent` is null.
-3. Wire into the composer, extend the types, and mirror them.
+2. Write `fetchShopperLifecycle(scope, granularity)` per §9. It must reuse the granularity already resolved for B1 and return both summary and series from one statement. For all-time, the summary is not-applicable but the query still builds the lifecycle series.
+3. Wire it into the existing Shoppers `Promise.all`, extend the types additively, and mirror them. Do not add another all-time span lookup.
 
-**8. Metric semantics:** Among shoppers active in range (distinct `(projectId, customerId)`, non-null id): **returning** = at least one event exists for that same `(projectId, customerId)` strictly before the range start, within the same ownership scope; **new** = active − returning. First-seen is evaluated per project (P3-P3), so one person can be new in project A and returning in project B. Percentages are computed only when active > 0, otherwise null.
+**8. Metric semantics:** Among shoppers active in range (distinct `(projectId, customerId)`, non-null id): selected-period **returning** = at least one event exists for that same identity strictly before the range start within the same ownership scope; selected-period **new** = active − returning. For each bucket, a shopper with pre-range history is Returning whenever active; a shopper without pre-range history is New only in the bucket containing their range-scoped `MIN(createdAt)` and Returning in every later active bucket. First-seen is evaluated per project (P3-P3). Percentages are computed only when active > 0, otherwise null.
 
-**9. SQL design:** One statement.
+**9. SQL design:** One statement containing range-scoped shopper rows, distinct active bucket membership, range-scoped first-in-range timestamps, one scoped pre-range distinct shopper set for bounded ranges, selected-period summary aggregates, and the same complete bucket skeleton used by B1. The historical set is normalized once and left joined to active shoppers; `MIN(createdAt)` is restricted to current-range rows. For each bucket, membership is classified as New or Returning and must satisfy `new + returning = B1 active`. All-time omits the historical CTE entirely. No separate lifecycle query and no historical global `MIN(createdAt)`.
 ```
-active_shoppers AS (
-  SELECT DISTINCT "projectId", NULLIF(BTRIM("customerId"), '') AS customer_id
-  FROM "Event"
-  WHERE ${scope.sql.currentEvent}
-    AND NULLIF(BTRIM("customerId"), '') IS NOT NULL
-)
-SELECT
-  COUNT(*) AS active,
-  COUNT(*) FILTER (
-    WHERE EXISTS (
-      SELECT 1 FROM "Event" prior
-      WHERE ${scope.sql.priorToRangeEvent}
-        AND prior."projectId" = a."projectId"
-        AND NULLIF(BTRIM(prior."customerId"), '') = a.customer_id
-    )
-  ) AS returning_shoppers
-FROM active_shoppers a
+range_scoped_shopper_events
+  -> active_bucket_membership
+  -> first_in_range
+  -> prior_shoppers (scoped distinct set when bounded)
+  -> active_shopper_classification (LEFT JOIN when bounded; FALSE when all-time)
+  -> selected_period_summary + zero-filled lifecycle buckets
 ```
-The `EXISTS` stops at the first pre-range row, so work scales with active shoppers rather than history size (P3-A2). **No `MIN(createdAt)` anywhere.**
+The rejected correlated `EXISTS` repeatedly scanned historical ranges because normalization wrapped the indexed identity column. The selected set-based shape scans/normalizes pre-range history once. The range-scoped `MIN(createdAt)` never scans retained history outside the selected range (P3-A2).
 
 **10. Scope/tenant rules:** **This is Phase 3's only query reading outside the selected range — the highest tenant-risk surface in the phase.** The pre-range read is bounded exclusively by `scope.sql.priorToRangeEvent`, which carries ownership and project; the correlation predicates add identity only. The module composes no ownership or date SQL itself. A cross-tenant fixture check is mandatory (§16).
 
-**11. Edge cases:** **All-time range → no lower bound**; B2 returns a not-applicable state ("new versus returning needs a bounded range") and **never reports 100% new**. A customer whose earliest event falls exactly at range start is **new** (the boundary is strictly `<`). A customer active in range whose prior events exist only in another project is **new** here (P3-P3). Null-`customerId` rows are excluded with coverage reported. Zero active shoppers → active 0 with null percentages.
+**11. Edge cases:** **All-time range → no lower bound**; the selected-period summary is not-applicable and never reports 100% New, while the series marks the first observed bucket New and later active buckets Returning. A customer whose earliest event falls exactly at range start is New (the boundary is strictly `<`). A customer active in range whose prior events exist only in another project is New here (P3-P3). Null-`customerId` rows are excluded consistently with B1 coverage. Zero active shoppers → active 0 with null percentages and zero-filled bounded buckets.
 
 **12. Payload types:**
 ```ts
 // MIRROR: apps/web/components/dashboard/analytics/analytics-types.ts
-export type ShopperLifecycle =
-  | { status: "available"; active: number; newShoppers: number;
-      returningShoppers: number; newPercent: number | null;
-      returningPercent: number | null; }
-  | { status: "not-applicable"; reason: "unbounded-range"; message: string }
-  | { status: "unavailable"; missingFields: string[]; message: string };
+export interface ShopperLifecycle {
+  summary:
+    | { status: "available"; activeShoppers: number; newShoppers: number;
+        returningShoppers: number; newPercent: number | null;
+        returningPercent: number | null; }
+    | { status: "not-applicable"; reason: "unbounded-range"; message: string };
+  series: {
+    granularity: TrendGranularity;
+    points: Array<{ date: string; activeShoppers: number;
+      newShoppers: number; returningShoppers: number }>;
+  };
+}
 ```
 
 **13. Frontend behavior:** None in this branch (rendering lands in 3E).
 
-**14. Empty/unavailable/partial states:** Covered by the three-way discriminant above. Percentages are null rather than zero whenever the denominator is absent (ADR 5).
+**14. Empty/unavailable/partial states:** Bounded empty scopes return measured zero counts with null percentages and zero-filled buckets. All-time summary uses the explicit not-applicable discriminant while its series remains available. Coverage continues to come from B1. Percentages are null rather than zero whenever the denominator is absent (ADR 5).
 
-**15. Performance budget and expected statement count:** +1 concurrent statement (Shoppers 2 → 3). **This is the phase's primary performance risk.** Its EXPLAIN must be captured and reviewed **before** 3E builds UI on it, so a Sales-comparison-style surprise (9–10 s, F-P2E-01) surfaces at design time rather than at benchmark time.
+**15. Performance budget and expected statement count:** +1 concurrent statement (Shoppers 2 → 3), plus the existing sequential all-time span lookup. B2 remains one combined statement. The correlated historical formulation was rejected after pathological timeouts; the measured set-based replacement removed repeated probes without an index or schema change. The mandatory rerun gate must still pass before 3E builds UI on it.
 
-**16. Fixture matrix:** {all-projects, one project} × {24h, 7d, 30d, custom-long, all}. Targeted cases: a customer whose first event is exactly at range start (expect new); one with an event one second earlier (expect returning); one active only in range (new); a cross-project shared customer classified independently per project; **a second tenant with an identical customer ID that must not influence the result (mandatory cross-tenant check)**; all-time → not-applicable; null-`customerId` rows excluded.
+**16. Fixture matrix:** {all-projects, one project} × {24h, 7d, 30d, custom-long, all}. Targeted cases: a customer first seen exactly at range start (summary/first bucket New); a customer with an event one second earlier (summary and every active bucket Returning); a no-history customer active in buckets 1, 2, and 4 (New, Returning, absent, Returning); repeated events in one bucket count once; a shared customer is classified independently across projects; **a second tenant with the same ID has zero influence**; null/blank IDs are excluded; empty scopes have null percentages; all-time summary is not-applicable while first and later active buckets are New then Returning. Automate `B2.new + B2.returning = B1.shoppers` across at least all-project 24h/30d/custom-long/all and single-project 30d/all.
 
-**17. Benchmark/EXPLAIN requirements:** Register query ID **#27 `shopper-new-returning`** with targets at all/all, all/custom-long, single/all, 30d. Record scan nodes, index usage on `(projectId, customerId)`, heap-fetch counts, and any temp-block spill. If heap access dominates, **file a `(projectId, customerId, createdAt)` index candidate — do not add an index.**
+**17. Benchmark/EXPLAIN requirements:** Benchmark registry changes remain deferred to 3F. Capture direct `EXPLAIN (ANALYZE, BUFFERS)` evidence for the combined statement at all-project/all-time, all-project/custom-long, single-project/all-time, and single-project/custom-long. Record execution time, scans, joins, loops, index/heap access, sorts, temp blocks/spill, and rows. The accepted plan must contain no repeated historical per-shopper SubPlan. Compare directionally with `shoppers:all:all` (~370 ms median/~976 ms p95) and the known multi-second Sales comparison. Ship summary+series when the set-based rerun is healthy; block Phase 3C if serious pathology remains. Do not add an index.
 
 **18. Validation commands:** typecheck · build · lint · `bench:typecheck` · `git diff --check` · `git status` · §16 fixture captures · confirm the four other tab payloads are byte-identical (the scope-fragment addition must not perturb them).
 
-**19. Acceptance criteria:** Classification correct on every §16 boundary case; cross-tenant isolation demonstrated; all-time returns not-applicable rather than "100% new"; the new scope fragment is additive with every existing fragment unchanged; EXPLAIN captured and reviewed; exactly +1 statement; no stacked trend implemented.
+**19. Acceptance criteria:** Classification is correct on every §16 case; cross-tenant isolation is demonstrated; all-time summary is not-applicable while the lifecycle series remains meaningful; every tested bucket satisfies `new + returning = B1 active`; the new scope fragment is additive with every existing fragment unchanged; one combined lifecycle statement is used; EXPLAIN is captured and passes the P3-P6 gate; statement count is exactly +1.
 
-**20. Risks:** R1 an unbounded pre-range scan degenerating like the Sales comparison → mitigated by the boolean anti-join plus mandatory pre-UI EXPLAIN. R2 a tenant leak through the pre-range read → mitigated by scope-fragment-only construction and the mandatory cross-tenant fixture. R3 an off-by-one at the range boundary → pinned by two adjacent fixtures. R4 a later contributor "simplifying" the fragment into the module → the module must carry a comment stating why the boundary lives in `analyticsScope.ts`.
+**20. Risks:** R1 a pre-range scan degenerating like the Sales comparison → the correlated probe was rejected and replaced by one scoped distinct-set scan plus join, with mandatory pre-UI EXPLAIN. R2 a tenant leak through the pre-range read → mitigated by scope-fragment-only construction and the mandatory cross-tenant fixture. R3 an off-by-one at the range boundary → pinned by two adjacent fixtures. R4 a later contributor reintroducing per-shopper historical probes → preserve the set-based CTE and the comment explaining why the boundary lives in `analyticsScope.ts`.
 
-**21. Recommended commit message:** `feat: add new versus returning shopper split`
+**21. Recommended commit message:** `feat: add new versus returning shopper analytics`
 
 ---
 
@@ -443,7 +438,7 @@ export type TopShoppers =
 **7. Step-by-step:**
 1. **Apply the P3-P5 correction** in `shopperSummary.ts`: change only the `uniqueCustomers` aggregate to composite counting. Keep the field name `uniqueCustomers`. **Do not touch `purchasingSessions` or `uniqueSessions`.** Add a comment citing blueprint Principle 5 and this ruling.
 2. Capture before/after `uniqueCustomers` values for every scope in the §16 matrix (see §17/§19 — these must appear in the PR).
-3. Compose the tab: legacy KPI row (labeled) → B1 trend → B2 split → B3 stats → B4 ranked list → coverage/data-quality strip.
+3. Compose the tab: legacy KPI row (labeled) → B1 trend → B2 lifecycle summary with progressively disclosed series → B3 stats → B4 ranked list → coverage/data-quality strip. This progressive disclosure is presentational, not lazy loading, and adds no details endpoint.
 4. Reuse existing primitives (`GlowCard`, `Icon`, the established chart idiom, and the Sales tab's basis-label and per-currency patterns).
 5. Source every unavailable message from `trackingReadiness.ts` rung copy so Health and Shoppers never phrase an unlock differently.
 6. Add all required disclosures listed in §13.
@@ -555,7 +550,7 @@ plus typecheck · build · lint · `git diff --check` · `git status`.
 5. GMV ranking is dominant-currency-only with disclosed exclusions; no FX and no blended totals anywhere (P3-P2).
 6. `(projectId, customerId)` identity holds in all-projects mode and is disclosed in copy (P3-P3).
 7. Null-`customerId` coverage and unattributed-order counts are surfaced (P3-A6).
-8. B2 ships the split summary only, with no stacked trend, and its pre-range read is bounded solely by the additive `analyticsScope.ts` fragment, with cross-tenant isolation demonstrated by fixture (P3-P6, P3-A2).
+8. B2 ships its selected-period split and per-bucket lifecycle series from one statement when the EXPLAIN gate passes; its only historical read is bounded by the additive `analyticsScope.ts` fragment; all-time summary is not-applicable while the series remains meaningful; `new + returning = B1 active` is fixture-proven; and cross-tenant isolation is demonstrated (P3-P6, P3-A2).
 9. The P3-P5 correction is implemented in 3E only, with the field name preserved, before/after values recorded for every scope, and the visible correction documented; `purchasingSessions` is unchanged.
 10. The Shoppers tab uses 4 concurrent statements plus the all-time span pre-query; Overview is untouched.
 11. No schema change, migration, index, rollup, cache, or new dependency exists in the diff range.
@@ -564,13 +559,13 @@ plus typecheck · build · lint · `git diff --check` · `git status`.
 
 # Phase 3 Explicit Stop Conditions
 
-**Out of scope — a branch proposing any of these is out of scope by definition:** B5 shopper drilldown · session-quality analytics · cohort retention · payments analysis and failure rates · lifetime returning-buyer metric · **the B2 stacked new/returning trend (deferred by P3-P6)** · shopper KPIs on the Overview tab (F-P2E-04 pool pressure) · any index addition · rollups, caches, materialized first-seen state, normalized Customer or Order tables, or any Prisma migration · `occurredAt`, batch ingestion, SDK, async processing, queues, or workers · changes to Sales, Products, Conversion, or Behavior metric semantics · **changing the legacy `purchasingSessions` basis** (P3-P1, requires separate approval) · optimizing the known Phase 2 findings (Sales comparison 9–10 s; Overview 12–13 statements) · benchmark-seeder changes unless the 3A pre-flight forces one.
+**Out of scope — a branch proposing any of these is out of scope by definition:** B5 shopper drilldown · session-quality analytics · cohort retention · payments analysis and failure rates · lifetime returning-buyer metric · a separate B2 historical first-seen query, details endpoint, or lazy-loading infrastructure · shopper KPIs on the Overview tab (F-P2E-04 pool pressure) · any index addition · rollups, caches, materialized first-seen state, normalized Customer or Order tables, or any Prisma migration · `occurredAt`, batch ingestion, SDK, async processing, queues, or workers · changes to Sales, Products, Conversion, or Behavior metric semantics · **changing the legacy `purchasingSessions` basis** (P3-P1, requires separate approval) · optimizing the known Phase 2 findings (Sales comparison 9–10 s; Overview 12–13 statements) · benchmark-seeder changes unless the 3A pre-flight forces one.
 
 **Stop-and-ask triggers:** the 3A pre-flight finds zero repeat buyers · an EXPLAIN appears to justify an index · B2's measured cost approaches the Sales-comparison magnitude · any change would alter a shipped Phase 1 or Phase 2 payload value other than the approved `uniqueCustomers` correction.
 
 **Debt to file (not to fix in this phase):**
 - Third trend-bucket implementation (`trend.ts`, `sales.ts:trendBucketsCtes`, and now B1) — recommend a dedicated consolidation chore branch **after** Phase 3, since mixing that refactor into a feature branch violates the move-versus-improve rule.
-- **The deferred B2 stacked new/returning trend** (P3-P6) — record with its rationale: it requires per-customer historical first-seen timestamps, which is the expensive shape P3-A2 rejects.
+- B2 lifecycle presentation remains scheduled for progressive disclosure in 3E; it is not a reason to add lazy loading or a details endpoint.
 - Any measured index candidate arising from 3C or 3D EXPLAIN evidence.
 
 # Phase 3 Benchmark Strategy
@@ -620,13 +615,13 @@ Every PR states plainly what was runtime-verified versus inspection-only (standa
 
 **Prompt 3C — `feature/shopper-new-returning`**
 
-> EventPulse repository, `apps/server` plus mirror types. Phases 3A–3B are merged. Implement **Phase 3C only**: the B2 New versus Returning **split summary**. Decision P3-P6 is locked: **do not implement a stacked new/returning trend** — B1 already provides the tab's time series, and the stacked trend is deferred debt. Confirm a clean tree; the owner handles branching and commits.
+> EventPulse repository, `apps/server` plus mirror types. Phases 3A–3B are merged. Implement **Phase 3C only**: the B2 New versus Returning selected-period summary and per-bucket lifecycle series from one statement. Decision P3-P6 is locked: do not add a separate historical first-seen scan, lazy-loading infrastructure, or a details endpoint. Confirm a clean tree; the owner handles branching and commits.
 >
 > **Read first:** `.claude/plans/phase-3-shopper-mvp-implementation-workflow.md` (branch 3C and the P3-A2 justification), `.claude/plans/product-performance-analytics-design-cozy-book.md` §B2, `apps/server/src/analytics/analyticsScope.ts` in full, and the engineering standards §§6, 9, 18.
 >
-> **Scope — exactly this:** (1) Add one **additive** member to `AnalyticsScopeSql`: `priorToRangeEvent: Prisma.Sql | null`, built with the file's existing private boundary helpers as ownership + project + `createdAt <` range start, expressed for the correlation alias `prior`, and **null when the range has no lower bound**. Change no existing fragment. (2) Create `shopperLifecycle.ts` with one statement: a `DISTINCT ("projectId", customerId)` active set over `scope.sql.currentEvent`, then `COUNT(*) FILTER (WHERE EXISTS (…))` against `scope.sql.priorToRangeEvent`, correlated on `projectId` and trimmed `customerId`. Use `EXISTS` semantics — **do not compute `MIN(createdAt)` anywhere**. (3) When `priorToRangeEvent` is null (all-time), skip the query and return a `not-applicable` state with an honest message; **never report "100% new."** (4) Return the three-way discriminated union from the workflow; percentages are null, never zero, when the denominator is absent. Wire into the composer and mirror the types. Do not touch other analytics modules, UI components, or the schema.
+> **Scope — exactly this:** (1) Add one **additive** member to `AnalyticsScopeSql`: `priorToRangeEvent: Prisma.Sql | null`, built with the file's existing private boundary helpers as ownership + project + strict `createdAt <` range start for alias `prior`, and null when the range has no lower bound. Change no existing fragment. (2) Create `shopperLifecycle.ts` with one statement over `scope.sql.currentEvent`: range-scoped shopper rows, distinct bucket membership, range-scoped `MIN(createdAt)`, one scoped pre-range distinct shopper set joined to active identities for bounded ranges, selected-period summary, and zero-filled lifecycle buckets. All-time omits the historical CTE. Reuse the B1 granularity resolved by the Shoppers composer and add no all-time span query. (3) For bounded ranges return measured summary counts and nullable percentages; for all-time return a not-applicable summary but still return the lifecycle series (first observed bucket New, later active buckets Returning). (4) Require `new + returning = B1 active` in every bucket. Wire additively into the composer and MIRROR types. Do not touch B1, other analytics modules, UI, schema, benchmark registry, or seeder.
 >
-> **Validation:** typecheck · build · lint · `bench:typecheck` · `git diff --check` · `git status`. Build fixtures via the ingest API covering: a customer whose first event is exactly at range start (expect **new**), one with an event one second earlier (expect **returning**), one active only in range, a customer shared across two projects (classified independently per project), all-time (not-applicable), and null-`customerId` rows (excluded). **Run a mandatory cross-tenant check:** a second account with an identical customer ID must not affect the result — paste the evidence. Confirm the four other tab payloads are byte-identical. Capture `EXPLAIN (ANALYZE, BUFFERS)` at all-projects/all-time and all-projects/custom-long and paste the scan nodes, index usage, and any temp-block spill; if heap access dominates, **file an index candidate in your report but do not add an index**. **Do not commit** — propose `feat: add new versus returning shopper split` and stop.
+> **Validation:** typecheck · build · lint · `bench:typecheck` · `git diff --check` · `git status`. Use real runtime fixtures for the exact-boundary and one-second-before cases, a New→Returning bucket transition with a gap, repeated same-bucket events, cross-project identity, cross-tenant isolation, null/blank IDs, empty scope, and all-time lifecycle behavior. Automate the B1/B2 invariant across all-project 24h/30d/custom-long/all and single-project 30d/all, and independently SQL-check one summary plus bounded/all-time series. Confirm other tab payloads and existing shopper outputs are unchanged. Capture `EXPLAIN (ANALYZE, BUFFERS)` for all-project/all-time, all-project/custom-long, and single-project/all-time; compare directionally with the retained Shoppers baseline and known Sales pathology. Ship summary+series only when the gate is healthy; otherwise prove the series is responsible before narrowing to summary-only. **Do not commit** — propose `feat: add new versus returning shopper analytics` when both views ship.
 
 **Prompt 3D — `feature/shopper-order-metrics`**
 
@@ -662,7 +657,7 @@ Every PR states plainly what was runtime-verified versus inspection-only (standa
 
 # Final Definition of Done
 
-Phase 3 is complete when all thirteen completion criteria hold; the six branches are merged with their fixture matrices, independent SQL cross-checks, and EXPLAIN captures pasted into their PRs; the P3-P5 correction is implemented in 3E with the field name preserved, before/after values recorded, and the visible correction documented; the B2 stacked trend is recorded as deferred debt rather than implemented; the Phase 3 baseline is committed alongside every prior baseline with all breaches filed as findings; the debt register carries the trend-bucket consolidation entry, the deferred stacked trend, and any measured index candidate; no schema, migration, index, cache, or rollup exists anywhere in the diff range; the Sales, Products, Conversion, and Behavior payloads are byte-identical to their pre-Phase-3 values; and Phase 4 can begin by consuming shopper order attribution without editing Phase 3 code.
+Phase 3 is complete when all thirteen completion criteria hold; the six branches are merged with their fixture matrices, independent SQL cross-checks, and EXPLAIN captures pasted into their PRs; the P3-P5 correction is implemented in 3E with the field name preserved, before/after values recorded, and the visible correction documented; B2 ships its summary and lifecycle series from one statement when the P3-P6 performance gate passes, with all-time summary not-applicable and the B1/B2 bucket invariant proven; the Phase 3 baseline is committed alongside every prior baseline with all breaches filed as findings; the debt register carries the trend-bucket consolidation entry and any measured index candidate; no schema, migration, index, cache, rollup, details endpoint, or lifecycle-specific lazy loading exists anywhere in the diff range; the Sales, Products, Conversion, and Behavior payloads are byte-identical to their pre-Phase-3 values; and Phase 4 can begin by consuming shopper order attribution without editing Phase 3 code.
 
 ---
 *Prepared read-only at `main` / `1c29cc6` (clean tree). All product and architecture decisions are locked; no implementation blockers remain. No source file was modified and no roadmap document was changed in preparing this plan.*

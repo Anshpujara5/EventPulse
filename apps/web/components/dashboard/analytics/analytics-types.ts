@@ -175,6 +175,39 @@ export interface ShopperCoverage {
   excludedPercent: number | null;
 }
 
+// MIRROR: apps/server/src/analytics/shopperLifecycle.ts
+export type ShopperLifecycleSummary =
+  | {
+      status: "available";
+      activeShoppers: number;
+      newShoppers: number;
+      returningShoppers: number;
+      newPercent: number | null;
+      returningPercent: number | null;
+    }
+  | {
+      status: "not-applicable";
+      reason: "unbounded-range";
+      message: string;
+    };
+
+export interface ShopperLifecyclePoint {
+  date: string;
+  activeShoppers: number;
+  newShoppers: number;
+  returningShoppers: number;
+}
+
+export interface ShopperLifecycleSeries {
+  granularity: TrendGranularity;
+  points: ShopperLifecyclePoint[];
+}
+
+export interface ShopperLifecycle {
+  summary: ShopperLifecycleSummary;
+  series: ShopperLifecycleSeries;
+}
+
 // MIRROR: apps/server/src/analytics/lineItems.ts
 export interface ItemsCoverage {
   status: "complete" | "partial" | "unavailable";
@@ -326,6 +359,7 @@ export interface ShoppersTabData {
   shopperSummary: ShopperSummary;
   shopperTrend: ShopperTrend;
   shopperCoverage: ShopperCoverage;
+  shopperLifecycle: ShopperLifecycle;
 }
 
 export interface BehaviorTabData {

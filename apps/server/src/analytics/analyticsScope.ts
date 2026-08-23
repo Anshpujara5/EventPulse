@@ -51,6 +51,7 @@ interface AnalyticsScopeSql {
   ownedAliasedEvent: Prisma.Sql;
   currentEvent: Prisma.Sql;
   currentAliasedEvent: Prisma.Sql;
+  priorToRangeEvent: Prisma.Sql | null;
   todayEvent: Prisma.Sql;
   comparisonCurrentRange: Prisma.Sql;
   comparisonPreviousRange: Prisma.Sql;
@@ -100,6 +101,12 @@ const ALIASED_EVENT_COLUMNS: EventColumns = {
   userId: Prisma.sql`e."userId"`,
   projectId: Prisma.sql`e."projectId"`,
   createdAt: Prisma.sql`e."createdAt"`,
+};
+
+const PRIOR_EVENT_COLUMNS: EventColumns = {
+  userId: Prisma.sql`prior."userId"`,
+  projectId: Prisma.sql`prior."projectId"`,
+  createdAt: Prisma.sql`prior."createdAt"`,
 };
 
 const PRESET_DAY_COUNTS: Record<Exclude<TimeRangeToken, "all">, number> = {
@@ -197,6 +204,17 @@ function scopedEventCondition(
     : ownership;
 }
 
+function priorToRangeEventCondition(
+  ownership: Prisma.Sql,
+  createdAt: Prisma.Sql,
+  period: AnalyticsPeriod,
+): Prisma.Sql | null {
+  return period.startInclusive
+    ? Prisma.sql`${ownership}
+        AND ${createdAt} < ${boundarySql(period.startInclusive)}`
+    : null;
+}
+
 function buildSqlScope(params: {
   userId: string;
   projectId: string | null;
@@ -214,6 +232,11 @@ function buildSqlScope(params: {
     params.userId,
     params.projectId,
   );
+  const ownedPriorEvent = ownedEventCondition(
+    PRIOR_EVENT_COLUMNS,
+    params.userId,
+    params.projectId,
+  );
 
   return {
     ownedProject: Prisma.sql`"userId" = ${params.userId}`,
@@ -227,6 +250,11 @@ function buildSqlScope(params: {
     currentAliasedEvent: scopedEventCondition(
       ownedAliasedEvent,
       ALIASED_EVENT_COLUMNS.createdAt,
+      params.range,
+    ),
+    priorToRangeEvent: priorToRangeEventCondition(
+      ownedPriorEvent,
+      PRIOR_EVENT_COLUMNS.createdAt,
       params.range,
     ),
     todayEvent: Prisma.sql`${ownedEvent}
