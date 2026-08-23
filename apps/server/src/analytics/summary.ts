@@ -54,6 +54,11 @@ import {
   type ShopperLifecycle,
 } from "./shopperLifecycle";
 import {
+  fetchShopperOrders,
+  type RepeatPurchase,
+  type TopShoppers,
+} from "./shopperOrders";
+import {
   fetchShopperTrend,
   type ShopperCoverage,
   type ShopperTrend,
@@ -113,6 +118,8 @@ export interface ShoppersTabData {
   shopperTrend: ShopperTrend;
   shopperCoverage: ShopperCoverage;
   shopperLifecycle: ShopperLifecycle;
+  repeatPurchase: RepeatPurchase;
+  topShoppers: TopShoppers;
 }
 
 export interface BehaviorTabData {
@@ -279,11 +286,12 @@ export async function buildShoppersSummary(
     ? await fetchTrendSpanDays(scope)
     : null;
   const trendGranularity = resolveTrendGranularity(scope, allTimeSpanDays);
-  const [shopperSummary, shopperTrendResult, shopperLifecycle] =
+  const [shopperSummary, shopperTrendResult, shopperLifecycle, shopperOrders] =
     await Promise.all([
       fetchShopperSummary(scope),
       fetchShopperTrend(scope, trendGranularity),
       fetchShopperLifecycle(scope, trendGranularity),
+      fetchShopperOrders(scope),
     ]);
 
   return {
@@ -291,6 +299,8 @@ export async function buildShoppersSummary(
     shopperTrend: shopperTrendResult.trend,
     shopperCoverage: shopperTrendResult.coverage,
     shopperLifecycle,
+    repeatPurchase: shopperOrders.repeatPurchase,
+    topShoppers: shopperOrders.topShoppers,
   };
 }
 

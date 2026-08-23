@@ -208,6 +208,44 @@ export interface ShopperLifecycle {
   series: ShopperLifecycleSeries;
 }
 
+// MIRROR: apps/server/src/analytics/shopperOrders.ts
+export type RepeatPurchase =
+  | {
+      status: "available";
+      buyers: number;
+      repeatBuyers: number;
+      repeatRatePercent: number | null;
+      averageOrdersPerBuyer: number | null;
+    }
+  | {
+      status: "unavailable";
+      missingFields: string[];
+      message: string;
+    };
+
+export interface TopShopperRow {
+  projectId: string;
+  projectName: string;
+  customerId: string;
+  confirmedOrders: number;
+  sessions: number;
+  gmv: number | null;
+}
+
+export type TopShoppers =
+  | {
+      status: "available";
+      currency: string | null;
+      rows: TopShopperRow[];
+      ordersExcludedForCurrency: number;
+      unattributedOrders: number;
+    }
+  | {
+      status: "unavailable";
+      missingFields: string[];
+      message: string;
+    };
+
 // MIRROR: apps/server/src/analytics/lineItems.ts
 export interface ItemsCoverage {
   status: "complete" | "partial" | "unavailable";
@@ -360,6 +398,8 @@ export interface ShoppersTabData {
   shopperTrend: ShopperTrend;
   shopperCoverage: ShopperCoverage;
   shopperLifecycle: ShopperLifecycle;
+  repeatPurchase: RepeatPurchase;
+  topShoppers: TopShoppers;
 }
 
 export interface BehaviorTabData {
