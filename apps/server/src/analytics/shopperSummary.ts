@@ -19,12 +19,13 @@ export interface ShopperSummary {
 export async function fetchShopperSummary(
   scope: AnalyticsScope,
 ): Promise<ShopperSummary> {
-  // COUNT(DISTINCT col) skips NULLs, so rows ingested before
-  // customerId/sessionId existed simply don't count — no ipAddress/userAgent
-  // identity guessing.
+  // Blueprint Principle 5 / P3-P5: shopper identity is project-scoped. The
+  // FILTER preserves the legacy null exclusion without guessing identity.
   const [row] = await prisma.$queryRaw<ShopperSummaryRow[]>`
     SELECT
-      COUNT(DISTINCT "customerId") AS "uniqueCustomers",
+      COUNT(DISTINCT ("projectId", "customerId")) FILTER (
+        WHERE "customerId" IS NOT NULL
+      ) AS "uniqueCustomers",
       COUNT(DISTINCT "sessionId") AS "uniqueSessions",
       COUNT(DISTINCT "sessionId") FILTER (
         WHERE LOWER(name) IN (${Prisma.join([...PURCHASE_ALIASES])})

@@ -226,7 +226,7 @@ function AnalyticsScopedOverview({
                   onRetry={refreshActiveTab}
                   state={getTabState("shoppers")}
                 >
-                  {(data) => <ShoppersTab summary={data.shopperSummary} />}
+                  {(data) => <ShoppersTab data={data} />}
                 </AnalyticsTabPanel>
               ),
               behavior: (

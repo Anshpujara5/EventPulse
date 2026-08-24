@@ -5,6 +5,7 @@ import type { ShopperSummary } from "./analytics-types";
 const SHOPPER_METRICS: {
   key: keyof ShopperSummary;
   label: string;
+  detail: string;
   tone: string;
   boxClassName: string;
   icon: string;
@@ -12,13 +13,15 @@ const SHOPPER_METRICS: {
   {
     key: "uniqueCustomers",
     label: "Unique Customers",
+    detail: "Project-scoped shopper identities",
     tone: "text-cyan-300",
     boxClassName: "border-cyan-400/25 bg-cyan-500/10",
     icon: "user",
   },
   {
     key: "uniqueSessions",
-    label: "Sessions",
+    label: "Unique Sessions",
+    detail: "Distinct tracked session IDs",
     tone: "text-violet-300",
     boxClassName: "border-violet-400/25 bg-violet-500/10",
     icon: "activity",
@@ -26,6 +29,7 @@ const SHOPPER_METRICS: {
   {
     key: "purchasingSessions",
     label: "Purchasing Sessions",
+    detail: "Sessions with purchase activity, not confirmed Orders",
     tone: "text-emerald-300",
     boxClassName: "border-emerald-400/25 bg-emerald-500/10",
     icon: "check",
@@ -61,7 +65,8 @@ export function ShopperKpiRow({ summary }: { summary: ShopperSummary }) {
           Shopper Overview
         </h2>
         <p className="text-xs text-slate-500">
-          Based on events that include customerId and sessionId.
+          Shopper identities are counted per project. Identical customer IDs
+          in different projects remain separate.
         </p>
       </div>
 
@@ -75,6 +80,9 @@ export function ShopperKpiRow({ summary }: { summary: ShopperSummary }) {
                 </h3>
                 <p className="mt-2 text-2xl font-black text-white">
                   {formatMetricValue(summary[metric.key])}
+                </p>
+                <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+                  {metric.detail}
                 </p>
               </div>
               <div
