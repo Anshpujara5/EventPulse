@@ -699,9 +699,271 @@ function validateOverviewMoneyKpi(value: unknown, path: string): string[] {
     : [`${path} unavailable state must use null value/currency and unlock guidance.`];
 }
 
+function isPercentageOrNull(value: unknown): value is number | null {
+  return (
+    value === null ||
+    (isNonNegativeNumber(value) && value <= 100)
+  );
+}
+
+function validateShopperPayload(
+  data: Record<string, unknown>,
+  range?: BenchmarkRange,
+): string[] {
+  const issues: string[] = [];
+  const summary = data.shopperSummary;
+  if (
+    !isRecord(summary) ||
+    !isNonNegativeNumber(summary.uniqueCustomers) ||
+    !isNonNegativeNumber(summary.uniqueSessions) ||
+    !isNonNegativeNumber(summary.purchasingSessions)
+  ) {
+    issues.push("shopperSummary counts must be non-negative numbers.");
+  }
+
+  const trend = data.shopperTrend;
+  const trendPoints = new Map<string, number>();
+  let trendGranularity: string | null = null;
+  if (
+    !isRecord(trend) ||
+    !["hour", "day", "month"].includes(String(trend.granularity)) ||
+    !Array.isArray(trend.points)
+  ) {
+    issues.push("shopperTrend must include a valid granularity and points[].");
+  } else {
+    trendGranularity = String(trend.granularity);
+    for (const [index, point] of trend.points.entries()) {
+      if (
+        !isRecord(point) ||
+        typeof point.date !== "string" ||
+        !isNonNegativeNumber(point.shoppers)
+      ) {
+        issues.push(`shopperTrend.points[${index}] is invalid.`);
+        continue;
+      }
+      if (trendPoints.has(point.date)) {
+        issues.push(`shopperTrend has a duplicate bucket: ${point.date}.`);
+      }
+      trendPoints.set(point.date, point.shoppers);
+    }
+  }
+
+  const coverage = data.shopperCoverage;
+  if (
+    !isRecord(coverage) ||
+    !isNonNegativeNumber(coverage.eventsInScope) ||
+    !isNonNegativeNumber(coverage.eventsWithCustomerId) ||
+    !isPercentageOrNull(coverage.excludedPercent)
+  ) {
+    issues.push("shopperCoverage fields are invalid.");
+  } else {
+    if (coverage.eventsWithCustomerId > coverage.eventsInScope) {
+      issues.push("shopperCoverage cannot exceed eventsInScope.");
+    }
+    if (coverage.eventsInScope === 0 && coverage.excludedPercent !== null) {
+      issues.push("shopperCoverage.excludedPercent must be null for an empty scope.");
+    }
+  }
+
+  const lifecycle = data.shopperLifecycle;
+  if (
+    !isRecord(lifecycle) ||
+    !isRecord(lifecycle.summary) ||
+    !isRecord(lifecycle.series) ||
+    !["hour", "day", "month"].includes(String(lifecycle.series.granularity)) ||
+    !Array.isArray(lifecycle.series.points)
+  ) {
+    issues.push("shopperLifecycle must include summary and a valid series.");
+  } else {
+    const lifecycleSummary = lifecycle.summary;
+    if (range === "all" && lifecycleSummary.status !== "not-applicable") {
+      issues.push("shopperLifecycle.summary must be not-applicable for all-time.");
+    } else if (range && range !== "all" && lifecycleSummary.status !== "available") {
+      issues.push("shopperLifecycle.summary must be available for bounded ranges.");
+    }
+
+    if (lifecycleSummary.status === "available") {
+      if (
+        !hasNonNegativeNumberFields(lifecycleSummary, [
+          "activeShoppers",
+          "newShoppers",
+          "returningShoppers",
+        ]) ||
+        !isPercentageOrNull(lifecycleSummary.newPercent) ||
+        !isPercentageOrNull(lifecycleSummary.returningPercent)
+      ) {
+        issues.push("shopperLifecycle available summary fields are invalid.");
+      } else if (
+        Number(lifecycleSummary.newShoppers) +
+          Number(lifecycleSummary.returningShoppers) !==
+        Number(lifecycleSummary.activeShoppers)
+      ) {
+        issues.push("shopperLifecycle summary new + returning must equal active.");
+      }
+    } else if (
+      lifecycleSummary.status !== "not-applicable" ||
+      lifecycleSummary.reason !== "unbounded-range" ||
+      typeof lifecycleSummary.message !== "string"
+    ) {
+      issues.push("shopperLifecycle summary has an invalid discriminant.");
+    }
+
+    if (
+      trendGranularity !== null &&
+      lifecycle.series.granularity !== trendGranularity
+    ) {
+      issues.push("shopperLifecycle and shopperTrend granularities must match.");
+    }
+
+    const lifecycleDates = new Set<string>();
+    for (const [index, point] of lifecycle.series.points.entries()) {
+      if (
+        !isRecord(point) ||
+        typeof point.date !== "string" ||
+        !hasNonNegativeNumberFields(point, [
+          "activeShoppers",
+          "newShoppers",
+          "returningShoppers",
+        ])
+      ) {
+        issues.push(`shopperLifecycle.series.points[${index}] is invalid.`);
+        continue;
+      }
+      lifecycleDates.add(point.date);
+      if (
+        Number(point.newShoppers) + Number(point.returningShoppers) !==
+        Number(point.activeShoppers)
+      ) {
+        issues.push(
+          `shopperLifecycle bucket ${point.date} new + returning must equal active.`,
+        );
+      }
+      const trendShoppers = trendPoints.get(point.date);
+      if (trendShoppers === undefined || trendShoppers !== point.activeShoppers) {
+        issues.push(
+          `shopperLifecycle bucket ${point.date} must match shopperTrend.`,
+        );
+      }
+    }
+    if (lifecycleDates.size !== trendPoints.size) {
+      issues.push("shopperLifecycle and shopperTrend must contain the same buckets.");
+    }
+  }
+
+  const repeatPurchase = data.repeatPurchase;
+  if (!isRecord(repeatPurchase)) {
+    issues.push("repeatPurchase must be an object.");
+  } else if (repeatPurchase.status === "available") {
+    if (
+      !isNonNegativeNumber(repeatPurchase.buyers) ||
+      !isNonNegativeNumber(repeatPurchase.repeatBuyers) ||
+      !isPercentageOrNull(repeatPurchase.repeatRatePercent) ||
+      !(
+        repeatPurchase.averageOrdersPerBuyer === null ||
+        isNonNegativeNumber(repeatPurchase.averageOrdersPerBuyer)
+      )
+    ) {
+      issues.push("repeatPurchase available fields are invalid.");
+    } else {
+      if (repeatPurchase.repeatBuyers > repeatPurchase.buyers) {
+        issues.push("repeatPurchase.repeatBuyers cannot exceed buyers.");
+      }
+      if (
+        repeatPurchase.buyers === 0 &&
+        (repeatPurchase.repeatRatePercent !== null ||
+          repeatPurchase.averageOrdersPerBuyer !== null)
+      ) {
+        issues.push("repeatPurchase empty state must use null rates.");
+      }
+    }
+  } else if (
+    repeatPurchase.status !== "unavailable" ||
+    !Array.isArray(repeatPurchase.missingFields) ||
+    !repeatPurchase.missingFields.every(
+      (field): field is string => typeof field === "string",
+    ) ||
+    typeof repeatPurchase.message !== "string"
+  ) {
+    issues.push("repeatPurchase has an invalid availability discriminant.");
+  }
+
+  const topShoppers = data.topShoppers;
+  if (!isRecord(topShoppers)) {
+    issues.push("topShoppers must be an object.");
+  } else if (topShoppers.status === "available") {
+    if (
+      !(topShoppers.currency === null || typeof topShoppers.currency === "string") ||
+      !Array.isArray(topShoppers.rows) ||
+      !isNonNegativeNumber(topShoppers.ordersExcludedForCurrency) ||
+      !isNonNegativeNumber(topShoppers.unattributedOrders)
+    ) {
+      issues.push("topShoppers available fields are invalid.");
+    } else {
+      if (topShoppers.rows.length > 10) {
+        issues.push("topShoppers.rows must contain at most 10 shoppers.");
+      }
+      let previous: Record<string, unknown> | null = null;
+      for (const [index, row] of topShoppers.rows.entries()) {
+        if (
+          !isRecord(row) ||
+          typeof row.projectId !== "string" ||
+          typeof row.projectName !== "string" ||
+          typeof row.customerId !== "string" ||
+          !isNonNegativeNumber(row.confirmedOrders) ||
+          !isNonNegativeNumber(row.sessions) ||
+          !(row.gmv === null || isNonNegativeNumber(row.gmv))
+        ) {
+          issues.push(`topShoppers.rows[${index}] is invalid.`);
+          continue;
+        }
+        if (topShoppers.currency === null && row.gmv !== null) {
+          issues.push("topShoppers rows cannot contain GMV without a currency.");
+        }
+        if (previous) {
+          const outOfOrder =
+            Number(previous.confirmedOrders) < row.confirmedOrders ||
+            (previous.confirmedOrders === row.confirmedOrders &&
+              Number(previous.sessions) < row.sessions) ||
+            (previous.confirmedOrders === row.confirmedOrders &&
+              previous.sessions === row.sessions &&
+              String(previous.customerId) > row.customerId) ||
+            (previous.confirmedOrders === row.confirmedOrders &&
+              previous.sessions === row.sessions &&
+              previous.customerId === row.customerId &&
+              String(previous.projectId) > row.projectId);
+          if (outOfOrder) {
+            issues.push("topShoppers.rows must preserve deterministic ranking.");
+          }
+        }
+        previous = row;
+      }
+    }
+  } else if (
+    topShoppers.status !== "unavailable" ||
+    !Array.isArray(topShoppers.missingFields) ||
+    !topShoppers.missingFields.every(
+      (field): field is string => typeof field === "string",
+    ) ||
+    typeof topShoppers.message !== "string"
+  ) {
+    issues.push("topShoppers has an invalid availability discriminant.");
+  }
+
+  if (
+    isRecord(repeatPurchase) &&
+    isRecord(topShoppers) &&
+    repeatPurchase.status !== topShoppers.status
+  ) {
+    issues.push("repeatPurchase and topShoppers availability must match.");
+  }
+
+  return issues;
+}
+
 export function validateAnalyticsPayload(
   tab: BenchmarkTab,
   payload: unknown,
+  range?: BenchmarkRange,
 ): string[] {
   if (!isRecord(payload) || payload.success !== true || !isRecord(payload.data)) {
     return ["Response must be a successful analytics envelope with object data."];
@@ -789,16 +1051,7 @@ export function validateAnalyticsPayload(
       return issues;
     }
     case "shoppers": {
-      const summary = data.shopperSummary;
-      if (
-        !isRecord(summary) ||
-        !isNonNegativeNumber(summary.uniqueCustomers) ||
-        !isNonNegativeNumber(summary.uniqueSessions) ||
-        !isNonNegativeNumber(summary.purchasingSessions)
-      ) {
-        return ["shopperSummary counts must be non-negative numbers."];
-      }
-      return [];
+      return validateShopperPayload(data, range);
     }
     case "behavior": {
       const required = [

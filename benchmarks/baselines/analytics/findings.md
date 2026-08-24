@@ -189,3 +189,85 @@ Both HTTP runs and both EXPLAIN runs completed with identical benchmark-scoped t
 - Mixed-currency correctness is exercised in all-project scope, but its isolated latency impact is not measured.
 - Large-tier Sales/line-item plans were not run; the matrix and target selection support them, but no large Phase 2 dataset was seeded in this branch.
 - The updated manifest intentionally prevents direct timing comparison with the historical baseline; Step 1 provides the only valid unchanged-manifest regression comparison.
+
+# Phase 3F Shopper Benchmark Extension
+
+> Additive findings for the completed Shopper MVP. This phase measured the merged shopper analytics without changing production SQL, metric semantics, indexes, schema, frontend code, or the deterministic benchmark generator.
+
+## Phase 3 Baseline Identity
+
+- Baseline: `phase-3-3e945a6-medium`
+- Source commit: `3e945a6619c2a74e807cae5095280594e7a6ff8f` (working tree intentionally dirty with Phase 3F benchmark changes)
+- Dataset: medium, seed `502`, fixed run anchor `2026-08-24T22:00:00.000Z`, 90-day spread, 549,864 events
+- Dataset revision: `phase-2-sales-line-items-v1` (unchanged by Phase 3F)
+- Manifest: `8c97632df42fe94439826c8b105c020b9373c9077b33bddf41a6fed8a61199a7`, matching the Phase 2 baseline
+- HTTP coverage: 60 cells, 600 measured requests, 60 passed, 0 failed; the immediate repeat also passed all 60 cells and 600 requests
+- EXPLAIN coverage: 223 targets across 28 query IDs; 223 priming and 1,115 measured plans completed
+- Curated evidence: [phase-3-3e945a6-medium.json](./phase-3-3e945a6-medium.json) and [phase-3-3e945a6-medium.md](./phase-3-3e945a6-medium.md)
+- Raw evidence: `benchmarks/results/analytics/phase3-medium-*.{json,md}` and `phase3-vs-phase2-comparison.{json,md}` (gitignored)
+
+## Shopper Dataset Pre-flight
+
+The read-only pre-flight found 2,455 buyers, 54 repeat buyers, 2,710 confirmed orders, 2,510 attributed confirmed orders, and 200 unattributed confirmed orders. It also found 3,000 customer IDs represented across multiple projects (15,000 project/customer identity pairs), 43,736 event rows with null customer IDs, no blank customer-ID rows, and four shoppers with mixed-currency money evidence. The event span was approximately 90 days, with all 24 trailing hourly buckets and 91 daily buckets represented. The required stop condition did not apply, so the benchmark seeder remained byte-identical.
+
+## Shopper HTTP Cells
+
+| Cell | Warm median | Warm p95 | Payload |
+|---|---:|---:|---:|
+| shoppers:single:24h | 120.769 ms | 131.284 ms | 5,665 B |
+| shoppers:single:7d | 143.266 ms | 148.971 ms | 3,326 B |
+| shoppers:single:30d | 178.915 ms | 184.127 ms | 6,545 B |
+| shoppers:single:custom-long | 137.961 ms | 165.270 ms | 8,682 B |
+| shoppers:single:all | 642.554 ms | 664.888 ms | 2,957 B |
+| shoppers:all:24h | 350.908 ms | 402.132 ms | 5,672 B |
+| shoppers:all:7d | 436.295 ms | 471.410 ms | 3,355 B |
+| shoppers:all:30d | 885.177 ms | 930.343 ms | 6,665 B |
+| shoppers:all:custom-long | 903.785 ms | 975.085 ms | 8,828 B |
+| shoppers:all:all | 2,003.183 ms | 2,070.032 ms | 2,976 B |
+
+Every Shopper response passed structural checks for legacy counts, B1 trend and coverage, B2 bounded/all-time discriminants and bucket invariants, B3 availability without an estimated fallback, and B4 deterministic ranking and currency-quality fields. All-project `uniqueCustomers` intentionally uses the corrected `(projectId, customerId)` identity and is not treated as a Phase 2 payload regression.
+
+## Phase 3 Query Summary
+
+| Query | Highest-cost measured target | Median | p95 | Plan observation |
+|---|---|---:|---:|---|
+| #26 Active shoppers trend | all/all/month | 1,265.017 ms | 1,463.849 ms | Event sequential scan; external-merge sorts; 35,099 temp blocks written |
+| #27 New/returning lifecycle | all/all/month | 904.016 ms | 945.324 ms | Set-based history classification; no correlated SubPlan; 20,515 temp blocks written |
+| #28 Shopper order metrics | all/all | 1,414.347 ms | 1,448.690 ms | Six nested-loop nodes; 1,556 temp blocks written; unused shared order-fact CTEs pruned |
+
+The 18 new targets include 15 with a sequential scan, 13 with temp-buffer activity, and 12 with at least one external-merge sort. Selective single-project variants chose `Event_projectId_createdAt_idx` in seven scan nodes; broad all-project/all-time variants generally chose sequential scans. Across the complete 223-target matrix, 134 targets contain a sequential scan, 74 use temp blocks, and 32 contain an external-merge sort.
+
+## Phase 3 Findings
+
+| ID | Surface | Observation | Evidence | Verdict | Confidence / next evidence |
+|---|---|---|---|---|---|
+| F-P3F-01 | Completed Shoppers tab | Relative to the same-manifest Phase 2 baseline, Shopper median latency increased by 161.35%-977.69% and payload size by 2,422.03%-7,449.57%. The payload growth is expected because B1-B4 fields were added; all ten cells passed the expanded correctness validator. | `phase3-vs-phase2-comparison` plus both Phase 3 HTTP runs. | Intentional capability growth with a measured latency cost; all ten cells exceed the historical 60 ms median hypothesis. | Confirmed at medium. Timings remain directional local evidence rather than a release gate. |
+| F-P3F-02 | B1 active shoppers (#26) | All/all/month is the most expensive B1 target at 1,265.017 ms median and 1,463.849 ms p95. Its representative plan reads 29,989 and writes 35,099 temp blocks. Single-project 30d is 75.927 ms and uses the project/date index through bitmap scans. | `q26-shopper-active-trend:*` targets. | Wide-scope distinct shopper bucketing is a confirmed spill and budget signal; no optimization is approved here. | Confirmed at medium; any candidate needs identical B1 bucket/coverage outputs and same-manifest plans. |
+| F-P3F-03 | B2 lifecycle (#27) | The current set-based implementation remains intact: all six plans contain no correlated `SubPlan`; bounded ranges build a distinct prior-shopper set once and left-join it to first-in-range shoppers. All/custom-long is 598.088 ms median, all/all/month is 904.016 ms, and single/custom-long is 107.430 ms. | `q27-shopper-new-returning:*` plan trees and production SQL capture. | The prior correlated-history pathology did not return. Wide plans still spill, peaking at 20,515 temp blocks written for all/all. | Correct plan shape confirmed. Future work may investigate working-set cost only with lifecycle-equivalence fixtures. |
+| F-P3F-04 | B3/B4 shopper orders (#28) | All/all is 1,414.347 ms median, all/custom-long 344.347 ms, and single/custom-long 52.200 ms. The all/all plan has six nested-loop nodes; inner CTE/materialize nodes execute up to 2,563 times, while total request SQL remains one statement. | `q28-shopper-order-metrics:*` plans. | Wide all-time cost is material, but the measured plan is not evidence for a semantic rewrite. | Confirmed at medium; capture candidate before/after evidence before changing order-fact composition. |
+| F-P3F-05 | Shared order-facts pruning (#28) | Every #28 plan retains the referenced `identity_representatives` and `currency_slices` chain. Unreferenced `session_representatives`, `money_evidence_quality`, and `order_quality` CTEs are absent from all six plan trees. | Recursive plan-node/CTE inspection for all #28 targets. | PostgreSQL prunes the unused shared CTE branches in this query shape. | Confirmed on PostgreSQL 14.18; preserve the check across database-version upgrades. |
+| F-P3F-06 | Shopper statement fan-out | The Shoppers composer runs four domain statements concurrently: legacy summary, B1 trend, B2 lifecycle, and B3/B4 orders. All-time performs the existing span-resolution statement first, then launches the same four-way fan-out. | `summary.ts` composition and query registry #10/#17/#26-#28. | Statement count matches the approved Phase 3 architecture; no statement was added by benchmark tooling. | Structurally confirmed. HTTP tooling still cannot isolate pool wait per statement. |
+| F-P3F-07 | Existing-tab regression coverage | All 50 Overview, Conversion, Products, Sales, and Behavior cells passed their existing payload validators. The same-manifest comparison removed no HTTP cells or EXPLAIN targets and added only the expected 18 shopper targets. Existing-tab payload-size deltas stayed between -1.118% and +3.170%. | Direct comparison with `phase-2-514bbd9b-medium`. | No correctness regression detected in existing tabs. | Runtime structural validation confirmed; raw response bodies are not retained for byte-level payload hashing. |
+| F-P3F-08 | Plan and timing stability | All 223 targets retained one plan-shape hash across their priming plus five measured executions. The HTTP repeat passed all cells with identical Shopper payload sizes, but 52/60 cells fell outside at least one provisional local variance band; Shopper repeat medians were 21.97%-32.80% slower. | Phase 3 EXPLAIN samples and immediate HTTP repeat. | Plans and payloads are stable; local timing remains noisy and unsuitable for a hard CI gate. | Confirmed for one immediate repeat. Collect more controlled runs before tightening timing bands. |
+
+## Phase 3 Deferred Candidates, Not Implemented
+
+- B1 distinct-bucketing working-set investigation for all-project/all-time.
+- B2 sort/temp-buffer investigation while preserving the set-based prior-shopper classification.
+- B3/B4 all-time order-fact plan investigation, including measured nested-loop work.
+- Request-level per-statement timing before attributing Shopper wall time to concurrency or pool wait.
+
+No optimization is approved by these findings. Each candidate requires semantic-equivalence fixtures, a same-manifest before/after run, and plan evidence.
+
+## Phase 3 Safety and Mutation Result
+
+Both HTTP runs and the complete EXPLAIN run recorded identical benchmark-scoped counts before and after: 2 users, 6 projects, 6 API keys, 549,864 events, 0 alerts, and 0 alert triggers. Each EXPLAIN target ran in a read-only transaction followed by rollback. The Phase 0D-5 and Phase 2 baselines remain unchanged. No production analytics source, schema, index, frontend file, or benchmark seed generator changed in Phase 3F.
+
+## Phase 3 Remaining Limitations
+
+- This is a medium-tier local workstation baseline, not a production SLO or CI timing gate.
+- HTTP timings include four concurrent Shopper statements but do not expose their individual duration or connection-pool wait.
+- Standalone EXPLAIN targets run sequentially and do not reproduce request-level concurrency.
+- The direct Phase 2 comparison uses the same manifest and environment classification, but its fixed run anchor differs; timing and small existing-tab payload-size deltas should remain directional.
+- The benchmark validates payload structure and cross-metric invariants, but does not retain raw response bodies for byte-for-byte comparison.
+- Large-tier Shopper plans and frontend render timings were not measured.

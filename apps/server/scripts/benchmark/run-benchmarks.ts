@@ -141,12 +141,13 @@ async function captureRequest(
 function toSample(input: {
   capture: HttpCapture;
   tab: BenchmarkTab;
+  range: BenchmarkCellDefinition["range"];
   phase: BenchmarkRequestSample["phase"];
   iteration: number;
 }): { sample: BenchmarkRequestSample; correctnessIssues: string[] } {
   const correctnessIssues =
     input.capture.status === 200
-      ? validateAnalyticsPayload(input.tab, input.capture.payload)
+      ? validateAnalyticsPayload(input.tab, input.capture.payload, input.range)
       : [];
   const passed =
     input.capture.status === 200 &&
@@ -200,6 +201,7 @@ async function runCell(input: {
     const result = toSample({
       capture,
       tab: input.definition.tab,
+      range: input.definition.range,
       phase: "warmup",
       iteration,
     });
@@ -212,6 +214,7 @@ async function runCell(input: {
     const result = toSample({
       capture,
       tab: input.definition.tab,
+      range: input.definition.range,
       phase: "measured",
       iteration,
     });

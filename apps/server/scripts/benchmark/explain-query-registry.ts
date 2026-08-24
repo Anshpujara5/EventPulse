@@ -112,7 +112,7 @@ export const ANALYTICS_QUERY_REGISTRY: AnalyticsQueryDefinition[] = [
     key: "all-time-span",
     module: "trend",
     label: "All-time event span",
-    tabs: ["overview", "sales"],
+    tabs: ["overview", "sales", "shoppers"],
     source: "apps/server/src/analytics/trend.ts:53",
     sourceStatementIndex: 1,
     supportedScopes: ["all", "single"],
@@ -283,6 +283,39 @@ export const ANALYTICS_QUERY_REGISTRY: AnalyticsQueryDefinition[] = [
     supportedScopes: ["all", "single"],
     supportedRanges: ["24h", "7d", "30d", "custom-long", "all"],
   },
+  {
+    id: 26,
+    key: "shopper-active-trend",
+    module: "shopperTrend",
+    label: "Distinct active shoppers by time bucket",
+    tabs: ["shoppers"],
+    source: "apps/server/src/analytics/shopperTrend.ts:125",
+    sourceStatementIndex: 1,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["30d", "custom-long", "all"],
+  },
+  {
+    id: 27,
+    key: "shopper-new-returning",
+    module: "shopperLifecycle",
+    label: "New and returning shopper lifecycle",
+    tabs: ["shoppers"],
+    source: "apps/server/src/analytics/shopperLifecycle.ts:202",
+    sourceStatementIndex: 1,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["30d", "custom-long", "all"],
+  },
+  {
+    id: 28,
+    key: "shopper-order-metrics",
+    module: "shopperOrders",
+    label: "Repeat purchase and top shopper metrics",
+    tabs: ["shoppers"],
+    source: "apps/server/src/analytics/shopperOrders.ts:79",
+    sourceStatementIndex: 1,
+    supportedScopes: ["all", "single"],
+    supportedRanges: ["30d", "custom-long", "all"],
+  },
 ];
 
 interface CapturedQuery {
@@ -350,7 +383,10 @@ async function getProductionModules() {
     comparison,
     commerce,
     session,
-    shopper,
+    shopperSummary,
+    shopperTrend,
+    shopperLifecycle,
+    shopperOrders,
     product,
     sales,
     lineItems,
@@ -363,6 +399,9 @@ async function getProductionModules() {
       import("../../src/analytics/commerceFunnel"),
       import("../../src/analytics/sessionFunnel"),
       import("../../src/analytics/shopperSummary"),
+      import("../../src/analytics/shopperTrend"),
+      import("../../src/analytics/shopperLifecycle"),
+      import("../../src/analytics/shopperOrders"),
       import("../../src/analytics/productPerformance"),
       import("../../src/analytics/sales"),
       import("../../src/analytics/lineItems"),
@@ -375,7 +414,10 @@ async function getProductionModules() {
     comparison,
     commerce,
     session,
-    shopper,
+    shopperSummary,
+    shopperTrend,
+    shopperLifecycle,
+    shopperOrders,
     product,
     sales,
     lineItems,
@@ -492,7 +534,9 @@ export async function captureProductionQuery(input: {
     );
   } else if (queryId === 17) {
     sql = oneQuery(
-      await captureQueries(() => modules.shopper.fetchShopperSummary(input.scope)),
+      await captureQueries(() =>
+        modules.shopperSummary.fetchShopperSummary(input.scope),
+      ),
       "shopper summary",
     );
   } else if (queryId === 18) {
@@ -567,12 +611,44 @@ export async function captureProductionQuery(input: {
       ),
       "product line-item attribution",
     );
-  } else {
+  } else if (queryId === 25) {
     sql = oneQuery(
       await captureQueries(() =>
         modules.lineItems.fetchCategoryLineItemAttribution(input.scope),
       ),
       "category line-item attribution",
+    );
+  } else if (queryId === 26 || queryId === 27) {
+    const allTimeSpanDays =
+      input.target.allTimeGranularity === "day"
+        ? 45
+        : input.target.allTimeGranularity === "month"
+          ? 90
+          : null;
+    const granularity = modules.trend.resolveTrendGranularity(
+      input.scope,
+      allTimeSpanDays,
+    );
+    if (!granularity) {
+      throw new Error(`Shopper query #${queryId} could not resolve a granularity.`);
+    }
+    sql = oneQuery(
+      await captureQueries(() =>
+        queryId === 26
+          ? modules.shopperTrend.fetchShopperTrend(input.scope, granularity)
+          : modules.shopperLifecycle.fetchShopperLifecycle(
+              input.scope,
+              granularity,
+            ),
+      ),
+      queryId === 26 ? "shopper active trend" : "shopper lifecycle",
+    );
+  } else {
+    sql = oneQuery(
+      await captureQueries(() =>
+        modules.shopperOrders.fetchShopperOrders(input.scope),
+      ),
+      "shopper order metrics",
     );
   }
 

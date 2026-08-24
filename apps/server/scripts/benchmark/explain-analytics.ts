@@ -352,7 +352,7 @@ Usage:
 
 Options:
   --tier VALUE          Dataset tier; must match the manifest (required)
-  --queries LIST        Query ids 1..25, comma-separated, or all
+  --queries LIST        Query ids 1..28, comma-separated, or all
   --projects LIST       all,single
   --ranges LIST         24h,7d,30d,custom-long,all
   --warmups N           Priming EXPLAIN plans (default: 1; minimum: 1)
@@ -371,7 +371,7 @@ Safety:
   BEGIN READ ONLY and is always followed by ROLLBACK.
 
 Defaults:
-  Medium covers all 25 production SQL statements and their material scope/range
+  Medium covers all 28 production SQL statements and their material scope/range
   variants. Small defaults to the all-time day-granularity trend target only.
   Large is available for explicit targeted runs but is not run automatically.`;
 }
@@ -391,7 +391,11 @@ function buildExplainTargets(options: ExplainCliOptions): ExplainTarget[] {
       for (const range of options.ranges) {
         if (!definition.supportedRanges.includes(range)) continue;
         const allTimeGranularity =
-          range === "all" && (definition.id === 13 || definition.id === 22)
+          range === "all" &&
+          (definition.id === 13 ||
+            definition.id === 22 ||
+            definition.id === 26 ||
+            definition.id === 27)
             ? options.tier === "small"
               ? "day"
               : "month"
@@ -988,8 +992,12 @@ function buildCuratedBaseline(input: {
   if (input.http.summary.failedCells > 0 || input.http.cells.length !== 60) {
     throw new Error("The curated HTTP baseline must contain 60 passing medium cells.");
   }
-  if (input.explain.summary.queriesCovered.length !== 25) {
-    throw new Error("The curated EXPLAIN baseline must cover all 25 queries.");
+  if (
+    input.explain.summary.queriesCovered.length !== ANALYTICS_QUERY_IDS.length
+  ) {
+    throw new Error(
+      `The curated EXPLAIN baseline must cover all ${ANALYTICS_QUERY_IDS.length} queries.`,
+    );
   }
 
   return {
